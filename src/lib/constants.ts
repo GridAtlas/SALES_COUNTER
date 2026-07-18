@@ -1,13 +1,14 @@
 import type { ActivityDef } from '@/types';
 
 /**
- * 訪問営業の移動・休憩と実施ファネル 13 項目。
+ * 訪問営業の移動・休憩と実施ファネル 15 項目。
  * 上から下へ、順序は保存されるので UI ではこの順で並べる。
  */
 export const ACTIVITIES: ActivityDef[] = [
   { type: 'office_departure', label: 'オフィス出発', color: 'blue', icon: 'Building2' },
   { type: 'site_arrival', label: '現場到着', color: 'cyan', icon: 'MapPinCheck' },
   { type: 'interphone', label: 'インターホン', color: 'slate', icon: 'DoorClosed' },
+  { type: 'activity_start', label: '活動開始', color: 'green', icon: 'Play' },
   { type: 'first_contact', label: '新規接触', color: 'sky', icon: 'UserPlus' },
   { type: 'revisit', label: '再訪接触', color: 'indigo', icon: 'RefreshCcw' },
   { type: 'appointment', label: 'アポ取得', color: 'amber', icon: 'CalendarCheck' },
@@ -16,6 +17,7 @@ export const ACTIVITIES: ActivityDef[] = [
   { type: 'sale', label: 'セールス', color: 'emerald', icon: 'ShoppingBag' },
   { type: 'break_start', label: '休憩開始', color: 'violet', icon: 'Coffee' },
   { type: 'break_end', label: '休憩終了', color: 'fuchsia', icon: 'CirclePlay' },
+  { type: 'activity_end', label: '活動終了', color: 'red', icon: 'Square' },
   { type: 'site_departure', label: '現場出発', color: 'indigo', icon: 'LogOut' },
   { type: 'office_arrival', label: 'オフィス到着', color: 'teal', icon: 'Building' },
 ];
