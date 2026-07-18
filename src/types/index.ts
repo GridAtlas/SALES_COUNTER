@@ -18,6 +18,7 @@ export type ActivityType =
   | 'break_end' // 休憩終了
   | 'site_departure' // 現場出発
   | 'office_arrival'; // オフィス到着
+
 export type AgeGroup =
   | '10代以下'
   | '20代'
@@ -40,12 +41,44 @@ export type RejectionReason =
   | 'やるなら連絡する'
   | 'その他';
 
+export type GpsStatus =
+  | 'pending'
+  | 'captured'
+  | 'denied'
+  | 'unavailable'
+  | 'timeout'
+  | 'error';
+
+export interface GpsDetails {
+  gpsStatus: GpsStatus;
+  gpsLatitude?: number;
+  gpsLongitude?: number;
+  gpsAccuracy?: number;
+  gpsCapturedAt?: number;
+}
+
+export interface AppointmentDetails {
+  appointmentDate: string;
+  appointmentStartTime: string;
+  appointmentEndTime: string;
+  appointmentMemo?: string;
+}
+
 export interface ActivityDetails {
   ageGroup?: AgeGroup;
   customerStatus?: CustomerStatus;
   presentationLocation?: PresentationLocation;
   rejectionReason?: RejectionReason;
   rejectionReasonDetail?: string;
+  appointmentDate?: string;
+  appointmentStartTime?: string;
+  appointmentEndTime?: string;
+  appointmentMemo?: string;
+  gpsStatus?: GpsStatus;
+  gpsLatitude?: number;
+  gpsLongitude?: number;
+  gpsAccuracy?: number;
+  gpsCapturedAt?: number;
 }
 
 export interface Activity extends ActivityDetails {

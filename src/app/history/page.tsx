@@ -13,16 +13,26 @@ const activityDetailLabels = (activity: Activity): string[] => {
       ? `その他：${activity.rejectionReasonDetail}`
       : activity.rejectionReason
     : undefined;
+  const appointmentSchedule = activity.appointmentDate
+    ? `${activity.appointmentDate} ${activity.appointmentStartTime ?? ''}${
+        activity.appointmentEndTime
+          ? `〜${activity.appointmentEndTime}`
+          : ''
+      }`
+    : undefined;
+  const appointmentMemo = activity.appointmentMemo
+    ? `メモ：${activity.appointmentMemo}`
+    : undefined;
 
   return [
     activity.customerStatus,
     activity.ageGroup,
     activity.presentationLocation,
     rejectionReason,
+    appointmentSchedule,
+    appointmentMemo,
   ].filter((detail): detail is string => Boolean(detail));
 };
-
-
 /** yyyy-mm-dd 形式のローカル日付文字列。 */
 const dateKey = (ts: number) => {
   const d = new Date(ts);
