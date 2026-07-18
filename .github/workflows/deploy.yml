@@ -2,8 +2,8 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [main]
-  workflow_dispatch:
+    branches: ["main"]
+  workflow_dispatch: {}
 
 # Pages deploy に必要な最小権限。
 permissions:
@@ -32,9 +32,6 @@ jobs:
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
-        with:
-          enablement: true
-          static_site_generator: next
 
       - name: Build (static export)
         run: npm run build
