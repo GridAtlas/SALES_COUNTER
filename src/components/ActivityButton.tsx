@@ -6,6 +6,7 @@ import {
   UserPlus,
   RefreshCcw,
   CalendarCheck,
+  MapPinHouse,
   Presentation,
   ShoppingBag,
   type LucideIcon,
@@ -20,6 +21,7 @@ const ICONS: Record<string, LucideIcon> = {
   UserPlus,
   RefreshCcw,
   CalendarCheck,
+  MapPinHouse,
   Presentation,
   ShoppingBag,
 };
