@@ -239,8 +239,23 @@ export default function HomePage() {
       />
 
       {activeView === 'counter' ? (
-        <div className="grid flex-1 content-start grid-cols-3 gap-2 px-2">
-          {ACTIVITIES.map((def) => (
+        <div className="grid flex-1 content-start grid-cols-3 gap-x-2 gap-y-1 px-2">
+          <h2 className="col-span-3 text-xs font-bold leading-4 text-slate-500">
+            🔲 移動・休憩
+          </h2>
+          {ACTIVITIES.slice(0, 6).map((def) => (
+            <ActivityButton
+              key={def.type}
+              def={def}
+              count={countOf(def.type)}
+              onTap={() => handleTap(def.type)}
+            />
+          ))}
+
+          <h2 className="col-span-3 mt-0.5 text-xs font-bold leading-4 text-slate-500">
+            🔲 営業活動
+          </h2>
+          {ACTIVITIES.slice(6).map((def) => (
             <ActivityButton
               key={def.type}
               def={def}
