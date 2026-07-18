@@ -10,7 +10,9 @@ export type ActivityType =
   | 'rejection_close' // 拒否クローズ
   | 'appointment' // アポ取得
   | 'appointment_visit' // アポ訪問
+  | 'pre_presentation_rejection' // プレゼン前拒否
   | 'presentation' // プレゼン
+  | 'post_presentation_rejection' // プレゼン後拒否
   | 'sale' // セールス
   | 'break_start' // 休憩開始
   | 'break_end' // 休憩終了
@@ -29,9 +31,21 @@ export type AgeGroup =
 
 export type CustomerStatus = '新規' | '既加入';
 
+export type PresentationLocation = '玄関外' | '玄関内' | '宅内';
+
+export type RejectionReason =
+  | '営業されたくない'
+  | '必要性を感じない'
+  | '料金が高い'
+  | 'やるなら連絡する'
+  | 'その他';
+
 export interface ActivityDetails {
   ageGroup?: AgeGroup;
   customerStatus?: CustomerStatus;
+  presentationLocation?: PresentationLocation;
+  rejectionReason?: RejectionReason;
+  rejectionReasonDetail?: string;
 }
 
 export interface Activity extends ActivityDetails {

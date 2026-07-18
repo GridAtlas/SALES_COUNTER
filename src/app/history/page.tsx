@@ -5,6 +5,23 @@ import Link from 'next/link';
 import { ArrowLeft, Check, Copy } from 'lucide-react';
 import { useCounterStore } from '@/store/useCounterStore';
 import { getActivityDef } from '@/lib/constants';
+import type { Activity } from '@/types';
+
+const activityDetailLabels = (activity: Activity): string[] => {
+  const rejectionReason = activity.rejectionReason
+    ? activity.rejectionReason === 'その他' && activity.rejectionReasonDetail
+      ? `その他：${activity.rejectionReasonDetail}`
+      : activity.rejectionReason
+    : undefined;
+
+  return [
+    activity.customerStatus,
+    activity.ageGroup,
+    activity.presentationLocation,
+    rejectionReason,
+  ].filter((detail): detail is string => Boolean(detail));
+};
+
 
 /** yyyy-mm-dd 形式のローカル日付文字列。 */
 const dateKey = (ts: number) => {
@@ -53,7 +70,7 @@ export default function HistoryPage() {
         .map(({ date, list }) => {
           const lines = list.map((activity) => {
             const def = getActivityDef(activity.type);
-            const details = [activity.customerStatus, activity.ageGroup].filter(Boolean);
+            const details = activityDetailLabels(activity);
             const detailText =
               details.length > 0 ? `（${details.join(' / ')}）` : '';
             return `${timeStr(activity.timestamp)} ${def?.label ?? activity.type}${detailText}`;
@@ -127,14 +144,9 @@ export default function HistoryPage() {
                       />
                       <span className="flex-1 text-sm text-stone-700">
                         {def?.label ?? a.type}
-                        {a.customerStatus && (
+                        {activityDetailLabels(a).length > 0 && (
                           <span className="ml-1 font-semibold text-stone-500">
-                            （{a.customerStatus}）
-                          </span>
-                        )}
-                        {a.ageGroup && (
-                          <span className="ml-1 font-semibold text-stone-500">
-                            （{a.ageGroup}）
+                            （{activityDetailLabels(a).join(' / ')}）
                           </span>
                         )}
                       </span>

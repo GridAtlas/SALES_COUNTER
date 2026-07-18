@@ -4,11 +4,19 @@ import { useEffect, useState } from 'react';
 import { ActivityButton } from '@/components/ActivityButton';
 import { AgeGroupModal } from '@/components/AgeGroupModal';
 import { CustomerStatusModal } from '@/components/CustomerStatusModal';
+import { PresentationLocationModal } from '@/components/PresentationLocationModal';
+import { RejectionReasonModal } from '@/components/RejectionReasonModal';
 import { BottomBar } from '@/components/BottomBar';
 import { Header } from '@/components/Header';
 import { ACTIVITIES, getActivityDef } from '@/lib/constants';
 import { useCounterStore } from '@/store/useCounterStore';
-import type { ActivityType, AgeGroup, CustomerStatus } from '@/types';
+import type {
+  ActivityType,
+  AgeGroup,
+  CustomerStatus,
+  PresentationLocation,
+  RejectionReason,
+} from '@/types';
 
 export default function HomePage() {
   // SSR ハイドレーション対策: localStorage を安全に読むため、初回は
@@ -17,6 +25,9 @@ export default function HomePage() {
   const [pendingContactType, setPendingContactType] =
     useState<ActivityType | null>(null);
   const [showInterphoneStatus, setShowInterphoneStatus] = useState(false);
+  const [showPresentationLocation, setShowPresentationLocation] = useState(false);
+  const [pendingRejectionType, setPendingRejectionType] =
+    useState<ActivityType | null>(null);
   useEffect(() => setHydrated(true), []);
 
   const activities = useCounterStore((s) => s.activities);
@@ -37,6 +48,18 @@ export default function HomePage() {
       setPendingContactType(type);
       return;
     }
+    if (
+      type === 'rejection_close' ||
+      type === 'pre_presentation_rejection' ||
+      type === 'post_presentation_rejection'
+    ) {
+      setPendingRejectionType(type);
+      return;
+    }
+    if (type === 'presentation') {
+      setShowPresentationLocation(true);
+      return;
+    }
     add(type);
   };
 
@@ -49,6 +72,22 @@ export default function HomePage() {
   const handleCustomerStatusSelect = (customerStatus: CustomerStatus) => {
     add('interphone', { customerStatus });
     setShowInterphoneStatus(false);
+  };
+
+  const handlePresentationLocationSelect = (
+    presentationLocation: PresentationLocation,
+  ) => {
+    add('presentation', { presentationLocation });
+    setShowPresentationLocation(false);
+  };
+
+  const handleRejectionReasonSelect = (
+    rejectionReason: RejectionReason,
+    rejectionReasonDetail?: string,
+  ) => {
+    if (!pendingRejectionType) return;
+    add(pendingRejectionType, { rejectionReason, rejectionReasonDetail });
+    setPendingRejectionType(null);
   };
   return (
     <>
@@ -83,6 +122,21 @@ export default function HomePage() {
         <CustomerStatusModal
           onSelect={handleCustomerStatusSelect}
           onCancel={() => setShowInterphoneStatus(false)}
+        />
+      )}
+
+      {showPresentationLocation && (
+        <PresentationLocationModal
+          onSelect={handlePresentationLocationSelect}
+          onCancel={() => setShowPresentationLocation(false)}
+        />
+      )}
+
+      {pendingRejectionType && (
+        <RejectionReasonModal
+          activityLabel={getActivityDef(pendingRejectionType)?.label ?? ''}
+          onSelect={handleRejectionReasonSelect}
+          onCancel={() => setPendingRejectionType(null)}
         />
       )}
     </>

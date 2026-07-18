@@ -1,7 +1,12 @@
-import type { ActivityDef, AgeGroup } from '@/types';
+import type {
+  ActivityDef,
+  AgeGroup,
+  PresentationLocation,
+  RejectionReason,
+} from '@/types';
 
 /**
- * 訪問営業の移動・休憩と実施ファネル 15 項目。
+ * 訪問営業の移動・休憩と実施ファネル 17 項目。
  * 上から下へ、順序は保存されるので UI ではこの順で並べる。
  */
 export const ACTIVITIES: ActivityDef[] = [
@@ -14,7 +19,9 @@ export const ACTIVITIES: ActivityDef[] = [
   { type: 'rejection_close', label: '拒否クローズ', color: 'red', icon: 'CircleX' },
   { type: 'appointment', label: 'アポ取得', color: 'amber', icon: 'CalendarCheck' },
   { type: 'appointment_visit', label: 'アポ訪問', color: 'rose', icon: 'MapPinHouse' },
+  { type: 'pre_presentation_rejection', label: 'プレゼン前拒否', color: 'red', icon: 'CircleX' },
   { type: 'presentation', label: 'プレゼン', color: 'orange', icon: 'Presentation' },
+  { type: 'post_presentation_rejection', label: 'プレゼン後拒否', color: 'red', icon: 'CircleX' },
   { type: 'sale', label: 'セールス', color: 'emerald', icon: 'ShoppingBag' },
   { type: 'break_start', label: '休憩開始', color: 'violet', icon: 'Coffee' },
   { type: 'break_end', label: '休憩終了', color: 'fuchsia', icon: 'CirclePlay' },
@@ -32,6 +39,20 @@ export const AGE_GROUPS: AgeGroup[] = [
   '70代',
   '80代以上',
   '不明',
+];
+
+export const PRESENTATION_LOCATIONS: PresentationLocation[] = [
+  '玄関外',
+  '玄関内',
+  '宅内',
+];
+
+export const REJECTION_REASONS: RejectionReason[] = [
+  '営業されたくない',
+  '必要性を感じない',
+  '料金が高い',
+  'やるなら連絡する',
+  'その他',
 ];
 
 export const getActivityDef = (type: string): ActivityDef | undefined =>
