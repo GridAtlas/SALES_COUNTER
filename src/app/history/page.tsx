@@ -15,12 +15,13 @@ const dateKey = (ts: number) => {
   return `${y}-${m}-${day}`;
 };
 
-/** HH:mm 形式のローカル時刻。 */
+/** HH:mm:ss 形式のローカル時刻。 */
 const timeStr = (ts: number) => {
   const d = new Date(ts);
   const h = String(d.getHours()).padStart(2, '0');
   const m = String(d.getMinutes()).padStart(2, '0');
-  return `${h}:${m}`;
+  const s = String(d.getSeconds()).padStart(2, '0');
+  return `${h}:${m}:${s}`;
 };
 
 export default function HistoryPage() {

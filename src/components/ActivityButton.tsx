@@ -2,6 +2,12 @@
 
 import { useState } from 'react';
 import {
+  Building,
+  Building2,
+  CirclePlay,
+  Coffee,
+  LogOut,
+  MapPinCheck,
   DoorClosed,
   UserPlus,
   RefreshCcw,
@@ -17,6 +23,12 @@ import type { ActivityDef } from '@/types';
 // 使う分だけを import してマップに載せる（constants に文字列で持たせて
 // ここで解決するアプローチ）。
 const ICONS: Record<string, LucideIcon> = {
+  Building,
+  Building2,
+  CirclePlay,
+  Coffee,
+  LogOut,
+  MapPinCheck,
   DoorClosed,
   UserPlus,
   RefreshCcw,
@@ -50,18 +62,17 @@ export function ActivityButton({ def, count, onTap }: Props) {
       onClick={handleTap}
       className={[
         'tap-target relative flex flex-col items-center justify-center',
-        'rounded-2xl shadow-sm select-none',
+        'min-h-16 rounded-xl px-1 py-1.5 shadow-sm select-none',
         `bg-${color}-500 active:bg-${color}-600`,
         'text-white font-semibold',
         'transition-transform duration-150',
         pulse ? 'scale-95' : 'scale-100',
-        'aspect-square',
       ].join(' ')}
       aria-label={def.label}
     >
-      <Icon size={32} strokeWidth={2.2} className="mb-1" />
-      <span className="text-sm leading-tight">{def.label}</span>
-      <span className="num text-3xl mt-1 leading-none">{count}</span>
+      <Icon size={21} strokeWidth={2.2} className="mb-0.5" />
+      <span className="text-[11px] leading-tight whitespace-nowrap">{def.label}</span>
+      <span className="num text-xl mt-0.5 leading-none">{count}</span>
     </button>
   );
 }

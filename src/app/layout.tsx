@@ -3,7 +3,7 @@ import './globals.css';
 
 export const metadata: Metadata = {
   title: 'SALES COUNTER',
-  description: '訪問営業ファネル 7 段のタップカウンター',
+  description: '訪問営業の移動・休憩・ファネルを時刻付きで記録するタップカウンター',
 };
 
 export const viewport: Viewport = {

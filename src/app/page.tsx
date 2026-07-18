@@ -26,7 +26,7 @@ export default function HomePage() {
     <>
       <Header totalCount={total} />
 
-      <div className="px-3 grid grid-cols-2 gap-3">
+      <div className="flex-1 content-start px-2 grid grid-cols-3 gap-2">
         {ACTIVITIES.map((def) => (
           <ActivityButton
             key={def.type}
