@@ -4,7 +4,7 @@ export type ActivityType =
   | 'office_departure' // オフィス出発
   | 'site_arrival' // 現場到着
   | 'interphone' // インターホン
-  | 'activity_start' // 活動開始
+  | 'interphone_response' // インターホン応答
   | 'first_contact' // 新規接触
   | 'revisit' // 再訪接触
   | 'appointment' // アポ取得
@@ -13,14 +13,24 @@ export type ActivityType =
   | 'sale' // セールス
   | 'break_start' // 休憩開始
   | 'break_end' // 休憩終了
-  | 'activity_end' // 活動終了
   | 'site_departure' // 現場出発
   | 'office_arrival'; // オフィス到着
+export type AgeGroup =
+  | '10代以下'
+  | '20代'
+  | '30代'
+  | '40代'
+  | '50代'
+  | '60代'
+  | '70代'
+  | '80代以上'
+  | '不明';
 
 export interface Activity {
   id: string;
   type: ActivityType;
   timestamp: number; // ms epoch
+  ageGroup?: AgeGroup;
 }
 
 export interface ActivityDef {
@@ -39,7 +49,6 @@ export interface ActivityDef {
     | 'violet'
     | 'fuchsia'
     | 'teal'
-    | 'green'
-    | 'red';
+    | 'zinc';
   icon: string; // lucide-react のアイコン名
 }

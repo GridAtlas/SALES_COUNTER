@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { Activity, ActivityType } from '@/types';
+import type { Activity, ActivityType, AgeGroup } from '@/types';
 
 /**
  * 記録形式は「1 タップ = 1 レコード」。
@@ -10,7 +10,7 @@ import type { Activity, ActivityType } from '@/types';
 interface CounterState {
   activities: Activity[];
 
-  add: (type: ActivityType) => void;
+  add: (type: ActivityType, ageGroup?: AgeGroup) => void;
   undoLast: () => void; // 一番最後のレコードを削除（種別問わず）
   reset: () => void;
 
@@ -26,11 +26,11 @@ export const useCounterStore = create<CounterState>()(
     (set, get) => ({
       activities: [],
 
-      add: (type) =>
+      add: (type, ageGroup) =>
         set((s) => ({
           activities: [
             ...s.activities,
-            { id: uid(), type, timestamp: Date.now() },
+            { id: uid(), type, timestamp: Date.now(), ageGroup },
           ],
         })),
 

@@ -2,15 +2,19 @@
 
 import { useEffect, useState } from 'react';
 import { ActivityButton } from '@/components/ActivityButton';
+import { AgeGroupModal } from '@/components/AgeGroupModal';
 import { BottomBar } from '@/components/BottomBar';
 import { Header } from '@/components/Header';
-import { ACTIVITIES } from '@/lib/constants';
+import { ACTIVITIES, getActivityDef } from '@/lib/constants';
 import { useCounterStore } from '@/store/useCounterStore';
+import type { ActivityType, AgeGroup } from '@/types';
 
 export default function HomePage() {
   // SSR ハイドレーション対策: localStorage を安全に読むため、初回は
   // 静的なゼロ値でレンダリング → mount 後に本物の store を反映。
   const [hydrated, setHydrated] = useState(false);
+  const [pendingContactType, setPendingContactType] =
+    useState<ActivityType | null>(null);
   useEffect(() => setHydrated(true), []);
 
   const activities = useCounterStore((s) => s.activities);
@@ -22,6 +26,20 @@ export default function HomePage() {
     hydrated ? activities.filter((a) => a.type === type).length : 0;
   const total = hydrated ? activities.length : 0;
 
+  const handleTap = (type: ActivityType) => {
+    if (type === 'first_contact' || type === 'revisit') {
+      setPendingContactType(type);
+      return;
+    }
+    add(type);
+  };
+
+  const handleAgeSelect = (ageGroup: AgeGroup) => {
+    if (!pendingContactType) return;
+    add(pendingContactType, ageGroup);
+    setPendingContactType(null);
+  };
+
   return (
     <>
       <Header totalCount={total} />
@@ -32,7 +50,7 @@ export default function HomePage() {
             key={def.type}
             def={def}
             count={countOf(def.type)}
-            onTap={() => add(def.type)}
+            onTap={() => handleTap(def.type)}
           />
         ))}
       </div>
@@ -42,6 +60,14 @@ export default function HomePage() {
         onUndo={undoLast}
         onReset={reset}
       />
+
+      {pendingContactType && (
+        <AgeGroupModal
+          contactLabel={getActivityDef(pendingContactType)?.label ?? ''}
+          onSelect={handleAgeSelect}
+          onCancel={() => setPendingContactType(null)}
+        />
+      )}
     </>
   );
 }
