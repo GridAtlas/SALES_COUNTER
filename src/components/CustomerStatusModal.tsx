@@ -2,7 +2,7 @@
 
 import type { CustomerStatus } from '@/types';
 
-const CUSTOMER_STATUSES: CustomerStatus[] = ['新規', '既加入'];
+const CUSTOMER_STATUSES: CustomerStatus[] = ['新規', '既加入', '過去解約'];
 
 interface Props {
   onSelect: (customerStatus: CustomerStatus) => void;
@@ -22,16 +22,16 @@ export function CustomerStatusModal({ onSelect, onCancel }: Props) {
           インターホン種別
         </h2>
         <p className="mt-1 text-center text-xs text-stone-500">
-          新規または既加入を選択してください
+          お客様の状況を選択してください
         </p>
 
-        <div className="mt-4 grid grid-cols-2 gap-3">
+        <div className="mt-4 grid grid-cols-3 gap-2">
           {CUSTOMER_STATUSES.map((customerStatus) => (
             <button
               key={customerStatus}
               type="button"
               onClick={() => onSelect(customerStatus)}
-              className="tap-target rounded-xl bg-slate-100 px-3 py-4 text-base font-bold text-slate-700 active:bg-slate-200"
+              className="tap-target rounded-xl bg-slate-100 px-1 py-3 text-sm font-bold text-slate-700 active:bg-slate-200"
             >
               {customerStatus}
             </button>

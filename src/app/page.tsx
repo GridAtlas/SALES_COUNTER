@@ -10,6 +10,8 @@ import { CustomerStatusModal } from '@/components/CustomerStatusModal';
 import { PresentationLocationModal } from '@/components/PresentationLocationModal';
 import { ProspectList } from '@/components/ProspectList';
 import { ProspectModal } from '@/components/ProspectModal';
+import { SummaryButton } from '@/components/SummaryButton';
+import { SummaryModal } from '@/components/SummaryModal';
 import { RejectionReasonModal } from '@/components/RejectionReasonModal';
 import { ViewTabs, type HomeView } from '@/components/ViewTabs';
 import { BottomBar } from '@/components/BottomBar';
@@ -55,6 +57,7 @@ export default function HomePage() {
   const [showAppointmentVisit, setShowAppointmentVisit] = useState(false);
   const [showPresentationLocation, setShowPresentationLocation] = useState(false);
   const [showProspect, setShowProspect] = useState(false);
+  const [showSummary, setShowSummary] = useState(false);
   const [pendingRejectionType, setPendingRejectionType] =
     useState<ActivityType | null>(null);
   const pendingGpsRef = useRef<Promise<GpsDetails> | null>(null);
@@ -239,7 +242,7 @@ export default function HomePage() {
       />
 
       {activeView === 'counter' ? (
-        <div className="grid flex-1 content-start grid-cols-3 gap-x-2 gap-y-1 px-2">
+        <div className="grid flex-1 content-start grid-cols-3 gap-x-2 gap-y-[3px] px-2">
           <h2 className="col-span-3 text-xs font-bold leading-4 text-slate-500">
             🔲 移動・休憩
           </h2>
@@ -263,6 +266,11 @@ export default function HomePage() {
               onTap={() => handleTap(def.type)}
             />
           ))}
+
+          <h2 className="col-span-3 mt-0.5 text-xs font-bold leading-4 text-slate-500">
+            🔲 集計・報告
+          </h2>
+          <SummaryButton totalCount={total} onTap={() => setShowSummary(true)} />
         </div>
       ) : activeView === 'appointments' ? (
         <AppointmentList appointments={appointments} hydrated={hydrated} />
@@ -350,6 +358,13 @@ export default function HomePage() {
             cancelPendingGps();
             setShowProspect(false);
           }}
+        />
+      )}
+
+      {showSummary && (
+        <SummaryModal
+          activities={activities}
+          onClose={() => setShowSummary(false)}
         />
       )}
 

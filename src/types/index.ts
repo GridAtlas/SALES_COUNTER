@@ -32,7 +32,7 @@ export type AgeGroup =
   | '80代以上'
   | '不明';
 
-export type CustomerStatus = '新規' | '既加入';
+export type CustomerStatus = '新規' | '既加入' | '過去解約';
 
 export type InterphoneResponseKind = '初回応答' | '2回目以降';
 
