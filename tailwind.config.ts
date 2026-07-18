@@ -14,11 +14,11 @@ const config: Config = {
   // 動的クラス名 `bg-${color}-500` を使うため safelist に列挙。
   safelist: [
     {
-      pattern: /bg-(slate|sky|indigo|amber|rose|orange|emerald|blue|cyan|violet|fuchsia|teal|zinc)-(50|100|500|600|700)/,
+      pattern: /bg-(slate|sky|indigo|amber|rose|orange|emerald|blue|cyan|violet|fuchsia|teal|zinc|red)-(50|100|500|600|700)/,
       variants: ['active'],
     },
-    { pattern: /text-(slate|sky|indigo|amber|rose|orange|emerald|blue|cyan|violet|fuchsia|teal|zinc)-(50|100|500|600|700)/ },
-    { pattern: /border-(slate|sky|indigo|amber|rose|orange|emerald|blue|cyan|violet|fuchsia|teal|zinc)-(100|200|300)/ },
+    { pattern: /text-(slate|sky|indigo|amber|rose|orange|emerald|blue|cyan|violet|fuchsia|teal|zinc|red)-(50|100|500|600|700)/ },
+    { pattern: /border-(slate|sky|indigo|amber|rose|orange|emerald|blue|cyan|violet|fuchsia|teal|zinc|red)-(100|200|300)/ },
   ],
 };
 

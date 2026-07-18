@@ -7,6 +7,7 @@ export type ActivityType =
   | 'interphone_response' // インターホン応答
   | 'first_contact' // 新規接触
   | 'revisit' // 再訪接触
+  | 'rejection_close' // 拒否クローズ
   | 'appointment' // アポ取得
   | 'appointment_visit' // アポ訪問
   | 'presentation' // プレゼン
@@ -55,6 +56,7 @@ export interface ActivityDef {
     | 'violet'
     | 'fuchsia'
     | 'teal'
-    | 'zinc';
+    | 'zinc'
+    | 'red';
   icon: string; // lucide-react のアイコン名
 }

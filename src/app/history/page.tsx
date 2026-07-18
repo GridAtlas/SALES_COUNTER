@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Check, Copy } from 'lucide-react';
 import { useCounterStore } from '@/store/useCounterStore';
 import { getActivityDef } from '@/lib/constants';
 
@@ -26,6 +26,7 @@ const timeStr = (ts: number) => {
 
 export default function HistoryPage() {
   const [hydrated, setHydrated] = useState(false);
+  const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'error'>('idle');
   useEffect(() => setHydrated(true), []);
 
   const activities = useCounterStore((s) => s.activities);
@@ -46,6 +47,33 @@ export default function HistoryPage() {
       .sort((a, b) => (a.date < b.date ? 1 : -1));
   }, [activities]);
 
+  const logText = useMemo(
+    () =>
+      grouped
+        .map(({ date, list }) => {
+          const lines = list.map((activity) => {
+            const def = getActivityDef(activity.type);
+            const details = [activity.customerStatus, activity.ageGroup].filter(Boolean);
+            const detailText =
+              details.length > 0 ? `（${details.join(' / ')}）` : '';
+            return `${timeStr(activity.timestamp)} ${def?.label ?? activity.type}${detailText}`;
+          });
+          return [date, ...lines].join('\n');
+        })
+        .join('\n\n'),
+    [grouped],
+  );
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(logText);
+      setCopyStatus('copied');
+    } catch {
+      setCopyStatus('error');
+    }
+    window.setTimeout(() => setCopyStatus('idle'), 2000);
+  };
+
   return (
     <>
       <header className="px-3 pt-2 pb-3 flex items-center gap-2">
@@ -57,6 +85,16 @@ export default function HistoryPage() {
           <ArrowLeft size={22} />
         </Link>
         <h1 className="font-semibold text-stone-700">履歴</h1>
+        <button
+          type="button"
+          onClick={handleCopy}
+          disabled={!hydrated || activities.length === 0}
+          className="tap-target ml-auto flex items-center gap-1.5 rounded-xl bg-white px-3 py-2 text-xs font-semibold text-stone-600 shadow-sm disabled:opacity-40"
+          aria-label="ログをコピー"
+        >
+          {copyStatus === 'copied' ? <Check size={16} /> : <Copy size={16} />}
+          <span>{copyStatus === 'copied' ? 'コピーしました' : copyStatus === 'error' ? 'コピー失敗' : 'ログをコピー'}</span>
+        </button>
       </header>
 
       <div className="flex-1 px-3 pb-4 space-y-4">

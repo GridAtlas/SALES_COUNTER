@@ -1,7 +1,7 @@
 import type { ActivityDef, AgeGroup } from '@/types';
 
 /**
- * 訪問営業の移動・休憩と実施ファネル 14 項目。
+ * 訪問営業の移動・休憩と実施ファネル 15 項目。
  * 上から下へ、順序は保存されるので UI ではこの順で並べる。
  */
 export const ACTIVITIES: ActivityDef[] = [
@@ -11,6 +11,7 @@ export const ACTIVITIES: ActivityDef[] = [
   { type: 'interphone_response', label: 'インターホン応答', color: 'zinc', icon: 'PhoneCall' },
   { type: 'first_contact', label: '新規接触', color: 'sky', icon: 'UserPlus' },
   { type: 'revisit', label: '再訪接触', color: 'indigo', icon: 'RefreshCcw' },
+  { type: 'rejection_close', label: '拒否クローズ', color: 'red', icon: 'CircleX' },
   { type: 'appointment', label: 'アポ取得', color: 'amber', icon: 'CalendarCheck' },
   { type: 'appointment_visit', label: 'アポ訪問', color: 'rose', icon: 'MapPinHouse' },
   { type: 'presentation', label: 'プレゼン', color: 'orange', icon: 'Presentation' },
