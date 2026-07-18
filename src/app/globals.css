@@ -1,0 +1,50 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  overscroll-behavior-y: contain;
+}
+
+body {
+  background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
+  min-height: 100dvh;
+  min-height: 100vh;
+  color: #334155;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    'Hiragino Sans',
+    'Hiragino Kaku Gothic ProN',
+    'Yu Gothic UI',
+    Meiryo,
+    sans-serif;
+}
+
+/* iOS のセーフエリア対応。ホームインジケータ / ノッチ回避。 */
+.safe-top {
+  padding-top: max(env(safe-area-inset-top), 0.5rem);
+}
+.safe-bottom {
+  padding-bottom: max(env(safe-area-inset-bottom), 0.5rem);
+}
+
+/* タップ領域 44px 以上を保証（Apple HIG）。 */
+.tap-target {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* 数字は等幅で。 */
+.num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+}
