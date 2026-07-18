@@ -3,6 +3,10 @@
 export type ActivityType =
   | 'office_departure' // オフィス出発
   | 'site_arrival' // 現場到着
+  | 'break_start' // 休憩開始
+  | 'travel_start' // 移動開始
+  | 'site_departure' // 現場出発
+  | 'office_arrival' // オフィス到着
   | 'interphone' // インターホン
   | 'interphone_response' // インターホン応答
   | 'first_contact' // 新規接触
@@ -14,10 +18,8 @@ export type ActivityType =
   | 'presentation' // プレゼン
   | 'post_presentation_rejection' // プレゼン後拒否
   | 'sale' // セールス
-  | 'break_start' // 休憩開始
-  | 'break_end' // 休憩終了
-  | 'site_departure' // 現場出発
-  | 'office_arrival'; // オフィス到着
+  | 'prospect' // 保留／見込
+  | 'break_end'; // 休憩終了（旧データ互換）
 
 export type AgeGroup =
   | '10代以下'
@@ -31,6 +33,12 @@ export type AgeGroup =
   | '不明';
 
 export type CustomerStatus = '新規' | '既加入';
+
+export type InterphoneResponseKind = '初回応答' | '2回目以降';
+
+export type AppointmentVisitKind = '予定アポ' | '当日取得アポ';
+
+export type ProspectRating = 1 | 2 | 3 | 4 | 5;
 
 export type PresentationLocation = '玄関外' | '玄関内' | '宅内';
 
@@ -67,6 +75,8 @@ export interface AppointmentDetails {
 export interface ActivityDetails {
   ageGroup?: AgeGroup;
   customerStatus?: CustomerStatus;
+  interphoneResponseKind?: InterphoneResponseKind;
+  appointmentVisitKind?: AppointmentVisitKind;
   presentationLocation?: PresentationLocation;
   rejectionReason?: RejectionReason;
   rejectionReasonDetail?: string;
@@ -74,6 +84,8 @@ export interface ActivityDetails {
   appointmentStartTime?: string;
   appointmentEndTime?: string;
   appointmentMemo?: string;
+  prospectRating?: ProspectRating;
+  prospectComment?: string;
   gpsStatus?: GpsStatus;
   gpsLatitude?: number;
   gpsLongitude?: number;

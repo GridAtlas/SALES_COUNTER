@@ -1,17 +1,24 @@
 import type {
   ActivityDef,
   AgeGroup,
+  AppointmentVisitKind,
+  InterphoneResponseKind,
   PresentationLocation,
+  ProspectRating,
   RejectionReason,
 } from '@/types';
 
 /**
- * 訪問営業の移動・休憩と実施ファネル 17 項目。
+ * 訪問営業の移動・休憩と実施ファネル 18 項目。
  * 上から下へ、順序は保存されるので UI ではこの順で並べる。
  */
 export const ACTIVITIES: ActivityDef[] = [
   { type: 'office_departure', label: 'オフィス出発', color: 'blue', icon: 'Building2' },
   { type: 'site_arrival', label: '現場到着', color: 'cyan', icon: 'MapPinCheck' },
+  { type: 'break_start', label: '休憩開始', color: 'violet', icon: 'Coffee' },
+  { type: 'travel_start', label: '移動開始', color: 'blue', icon: 'Navigation' },
+  { type: 'site_departure', label: '現場出発', color: 'indigo', icon: 'LogOut' },
+  { type: 'office_arrival', label: 'オフィス到着', color: 'teal', icon: 'Building' },
   { type: 'interphone', label: 'インターホン', color: 'slate', icon: 'DoorClosed' },
   { type: 'interphone_response', label: 'インターホン応答', color: 'zinc', icon: 'PhoneCall' },
   { type: 'first_contact', label: '新規接触', color: 'sky', icon: 'UserPlus' },
@@ -23,10 +30,11 @@ export const ACTIVITIES: ActivityDef[] = [
   { type: 'presentation', label: 'プレゼン', color: 'orange', icon: 'Presentation' },
   { type: 'post_presentation_rejection', label: 'プレゼン後拒否', color: 'red', icon: 'CircleX' },
   { type: 'sale', label: 'セールス', color: 'emerald', icon: 'ShoppingBag' },
-  { type: 'break_start', label: '休憩開始', color: 'violet', icon: 'Coffee' },
+  { type: 'prospect', label: '保留／見込', color: 'amber', icon: 'Star' },
+];
+
+const LEGACY_ACTIVITIES: ActivityDef[] = [
   { type: 'break_end', label: '休憩終了', color: 'fuchsia', icon: 'CirclePlay' },
-  { type: 'site_departure', label: '現場出発', color: 'indigo', icon: 'LogOut' },
-  { type: 'office_arrival', label: 'オフィス到着', color: 'teal', icon: 'Building' },
 ];
 
 export const AGE_GROUPS: AgeGroup[] = [
@@ -40,6 +48,18 @@ export const AGE_GROUPS: AgeGroup[] = [
   '80代以上',
   '不明',
 ];
+
+export const INTERPHONE_RESPONSE_KINDS: InterphoneResponseKind[] = [
+  '初回応答',
+  '2回目以降',
+];
+
+export const APPOINTMENT_VISIT_KINDS: AppointmentVisitKind[] = [
+  '予定アポ',
+  '当日取得アポ',
+];
+
+export const PROSPECT_RATINGS: ProspectRating[] = [1, 2, 3, 4, 5];
 
 export const PRESENTATION_LOCATIONS: PresentationLocation[] = [
   '玄関外',
@@ -56,4 +76,4 @@ export const REJECTION_REASONS: RejectionReason[] = [
 ];
 
 export const getActivityDef = (type: string): ActivityDef | undefined =>
-  ACTIVITIES.find((a) => a.type === type);
+  [...ACTIVITIES, ...LEGACY_ACTIVITIES].find((activity) => activity.type === type);

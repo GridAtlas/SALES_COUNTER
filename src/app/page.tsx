@@ -5,13 +5,21 @@ import { ActivityButton } from '@/components/ActivityButton';
 import { AgeGroupModal } from '@/components/AgeGroupModal';
 import { AppointmentList } from '@/components/AppointmentList';
 import { AppointmentModal } from '@/components/AppointmentModal';
+import { ChoiceModal } from '@/components/ChoiceModal';
 import { CustomerStatusModal } from '@/components/CustomerStatusModal';
 import { PresentationLocationModal } from '@/components/PresentationLocationModal';
+import { ProspectList } from '@/components/ProspectList';
+import { ProspectModal } from '@/components/ProspectModal';
 import { RejectionReasonModal } from '@/components/RejectionReasonModal';
 import { ViewTabs, type HomeView } from '@/components/ViewTabs';
 import { BottomBar } from '@/components/BottomBar';
 import { Header } from '@/components/Header';
-import { ACTIVITIES, getActivityDef } from '@/lib/constants';
+import {
+  ACTIVITIES,
+  APPOINTMENT_VISIT_KINDS,
+  getActivityDef,
+  INTERPHONE_RESPONSE_KINDS,
+} from '@/lib/constants';
 import { requestCurrentGps } from '@/lib/geolocation';
 import { useCounterStore } from '@/store/useCounterStore';
 import type {
@@ -20,9 +28,12 @@ import type {
   ActivityType,
   AgeGroup,
   AppointmentDetails,
+  AppointmentVisitKind,
   CustomerStatus,
   GpsDetails,
+  InterphoneResponseKind,
   PresentationLocation,
+  ProspectRating,
   RejectionReason,
 } from '@/types';
 
@@ -39,8 +50,11 @@ export default function HomePage() {
   const [pendingContactType, setPendingContactType] =
     useState<ActivityType | null>(null);
   const [showInterphoneStatus, setShowInterphoneStatus] = useState(false);
+  const [showInterphoneResponse, setShowInterphoneResponse] = useState(false);
   const [showAppointment, setShowAppointment] = useState(false);
+  const [showAppointmentVisit, setShowAppointmentVisit] = useState(false);
   const [showPresentationLocation, setShowPresentationLocation] = useState(false);
+  const [showProspect, setShowProspect] = useState(false);
   const [pendingRejectionType, setPendingRejectionType] =
     useState<ActivityType | null>(null);
   const pendingGpsRef = useRef<Promise<GpsDetails> | null>(null);
@@ -68,6 +82,16 @@ export default function HomePage() {
               );
               return keyComparison || right.timestamp - left.timestamp;
             })
+        : [],
+    [activities, hydrated],
+  );
+
+  const prospects = useMemo(
+    () =>
+      hydrated
+        ? activities
+            .filter((activity) => activity.type === 'prospect')
+            .sort((left, right) => right.timestamp - left.timestamp)
         : [],
     [activities, hydrated],
   );
@@ -103,6 +127,11 @@ export default function HomePage() {
       setShowInterphoneStatus(true);
       return;
     }
+    if (type === 'interphone_response') {
+      pendingGpsRef.current = gpsPromise;
+      setShowInterphoneResponse(true);
+      return;
+    }
     if (type === 'first_contact' || type === 'revisit') {
       pendingGpsRef.current = gpsPromise;
       setPendingContactType(type);
@@ -111,6 +140,11 @@ export default function HomePage() {
     if (type === 'appointment') {
       pendingGpsRef.current = gpsPromise;
       setShowAppointment(true);
+      return;
+    }
+    if (type === 'appointment_visit') {
+      pendingGpsRef.current = gpsPromise;
+      setShowAppointmentVisit(true);
       return;
     }
     if (
@@ -127,6 +161,11 @@ export default function HomePage() {
       setShowPresentationLocation(true);
       return;
     }
+    if (type === 'prospect') {
+      pendingGpsRef.current = gpsPromise;
+      setShowProspect(true);
+      return;
+    }
     recordActivity(type, {}, gpsPromise);
   };
 
@@ -141,10 +180,24 @@ export default function HomePage() {
     setShowInterphoneStatus(false);
   };
 
+  const handleInterphoneResponseSelect = (
+    interphoneResponseKind: InterphoneResponseKind,
+  ) => {
+    recordPendingActivity('interphone_response', { interphoneResponseKind });
+    setShowInterphoneResponse(false);
+  };
+
   const handleAppointmentSave = (details: AppointmentDetails) => {
     recordPendingActivity('appointment', details);
     setShowAppointment(false);
     setActiveView('appointments');
+  };
+
+  const handleAppointmentVisitSelect = (
+    appointmentVisitKind: AppointmentVisitKind,
+  ) => {
+    recordPendingActivity('appointment_visit', { appointmentVisitKind });
+    setShowAppointmentVisit(false);
   };
 
   const handlePresentationLocationSelect = (
@@ -166,6 +219,15 @@ export default function HomePage() {
     setPendingRejectionType(null);
   };
 
+  const handleProspectSave = (
+    prospectRating: ProspectRating,
+    prospectComment?: string,
+  ) => {
+    recordPendingActivity('prospect', { prospectRating, prospectComment });
+    setShowProspect(false);
+    setActiveView('prospects');
+  };
+
   return (
     <>
       <Header totalCount={total} />
@@ -173,6 +235,7 @@ export default function HomePage() {
         activeView={activeView}
         onChange={setActiveView}
         appointmentCount={appointments.length}
+        prospectCount={prospects.length}
       />
 
       {activeView === 'counter' ? (
@@ -186,8 +249,10 @@ export default function HomePage() {
             />
           ))}
         </div>
-      ) : (
+      ) : activeView === 'appointments' ? (
         <AppointmentList appointments={appointments} hydrated={hydrated} />
+      ) : (
+        <ProspectList prospects={prospects} hydrated={hydrated} />
       )}
 
       <BottomBar
@@ -217,6 +282,19 @@ export default function HomePage() {
         />
       )}
 
+      {showInterphoneResponse && (
+        <ChoiceModal
+          title="インターホン応答"
+          description="応答回数を選択すると記録されます"
+          options={INTERPHONE_RESPONSE_KINDS}
+          onSelect={handleInterphoneResponseSelect}
+          onCancel={() => {
+            cancelPendingGps();
+            setShowInterphoneResponse(false);
+          }}
+        />
+      )}
+
       {showAppointment && (
         <AppointmentModal
           onSave={handleAppointmentSave}
@@ -227,12 +305,35 @@ export default function HomePage() {
         />
       )}
 
+      {showAppointmentVisit && (
+        <ChoiceModal
+          title="アポ訪問"
+          description="アポ種別を選択すると記録されます"
+          options={APPOINTMENT_VISIT_KINDS}
+          onSelect={handleAppointmentVisitSelect}
+          onCancel={() => {
+            cancelPendingGps();
+            setShowAppointmentVisit(false);
+          }}
+        />
+      )}
+
       {showPresentationLocation && (
         <PresentationLocationModal
           onSelect={handlePresentationLocationSelect}
           onCancel={() => {
             cancelPendingGps();
             setShowPresentationLocation(false);
+          }}
+        />
+      )}
+
+      {showProspect && (
+        <ProspectModal
+          onSave={handleProspectSave}
+          onCancel={() => {
+            cancelPendingGps();
+            setShowProspect(false);
           }}
         />
       )}

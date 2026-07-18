@@ -4,7 +4,7 @@ import { useState } from 'react';
 import {
   Building,
   Building2,
-  CirclePlay,
+  Navigation,
   CircleX,
   Coffee,
   LogOut,
@@ -16,6 +16,7 @@ import {
   CalendarCheck,
   MapPinHouse,
   Presentation,
+  Star,
   ShoppingBag,
   type LucideIcon,
 } from 'lucide-react';
@@ -27,7 +28,7 @@ import type { ActivityDef } from '@/types';
 const ICONS: Record<string, LucideIcon> = {
   Building,
   Building2,
-  CirclePlay,
+  Navigation,
   CircleX,
   Coffee,
   LogOut,
@@ -38,6 +39,7 @@ const ICONS: Record<string, LucideIcon> = {
   RefreshCcw,
   CalendarCheck,
   MapPinHouse,
+  Star,
   Presentation,
   ShoppingBag,
 };

@@ -23,14 +23,24 @@ const activityDetailLabels = (activity: Activity): string[] => {
   const appointmentMemo = activity.appointmentMemo
     ? `メモ：${activity.appointmentMemo}`
     : undefined;
+  const prospectRating = activity.prospectRating
+    ? `見込度：${'★'.repeat(activity.prospectRating)}（${activity.prospectRating}/5）`
+    : undefined;
+  const prospectComment = activity.prospectComment
+    ? `コメント：${activity.prospectComment}`
+    : undefined;
 
   return [
     activity.customerStatus,
+    activity.interphoneResponseKind,
     activity.ageGroup,
+    activity.appointmentVisitKind,
     activity.presentationLocation,
     rejectionReason,
     appointmentSchedule,
     appointmentMemo,
+    prospectRating,
+    prospectComment,
   ].filter((detail): detail is string => Boolean(detail));
 };
 /** yyyy-mm-dd 形式のローカル日付文字列。 */
