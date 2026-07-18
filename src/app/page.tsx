@@ -3,11 +3,12 @@
 import { useEffect, useState } from 'react';
 import { ActivityButton } from '@/components/ActivityButton';
 import { AgeGroupModal } from '@/components/AgeGroupModal';
+import { CustomerStatusModal } from '@/components/CustomerStatusModal';
 import { BottomBar } from '@/components/BottomBar';
 import { Header } from '@/components/Header';
 import { ACTIVITIES, getActivityDef } from '@/lib/constants';
 import { useCounterStore } from '@/store/useCounterStore';
-import type { ActivityType, AgeGroup } from '@/types';
+import type { ActivityType, AgeGroup, CustomerStatus } from '@/types';
 
 export default function HomePage() {
   // SSR ハイドレーション対策: localStorage を安全に読むため、初回は
@@ -15,6 +16,7 @@ export default function HomePage() {
   const [hydrated, setHydrated] = useState(false);
   const [pendingContactType, setPendingContactType] =
     useState<ActivityType | null>(null);
+  const [showInterphoneStatus, setShowInterphoneStatus] = useState(false);
   useEffect(() => setHydrated(true), []);
 
   const activities = useCounterStore((s) => s.activities);
@@ -27,6 +29,10 @@ export default function HomePage() {
   const total = hydrated ? activities.length : 0;
 
   const handleTap = (type: ActivityType) => {
+    if (type === 'interphone') {
+      setShowInterphoneStatus(true);
+      return;
+    }
     if (type === 'first_contact' || type === 'revisit') {
       setPendingContactType(type);
       return;
@@ -36,10 +42,14 @@ export default function HomePage() {
 
   const handleAgeSelect = (ageGroup: AgeGroup) => {
     if (!pendingContactType) return;
-    add(pendingContactType, ageGroup);
+    add(pendingContactType, { ageGroup });
     setPendingContactType(null);
   };
 
+  const handleCustomerStatusSelect = (customerStatus: CustomerStatus) => {
+    add('interphone', { customerStatus });
+    setShowInterphoneStatus(false);
+  };
   return (
     <>
       <Header totalCount={total} />
@@ -66,6 +76,13 @@ export default function HomePage() {
           contactLabel={getActivityDef(pendingContactType)?.label ?? ''}
           onSelect={handleAgeSelect}
           onCancel={() => setPendingContactType(null)}
+        />
+      )}
+
+      {showInterphoneStatus && (
+        <CustomerStatusModal
+          onSelect={handleCustomerStatusSelect}
+          onCancel={() => setShowInterphoneStatus(false)}
         />
       )}
     </>

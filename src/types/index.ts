@@ -26,11 +26,17 @@ export type AgeGroup =
   | '80代以上'
   | '不明';
 
-export interface Activity {
+export type CustomerStatus = '新規' | '既加入';
+
+export interface ActivityDetails {
+  ageGroup?: AgeGroup;
+  customerStatus?: CustomerStatus;
+}
+
+export interface Activity extends ActivityDetails {
   id: string;
   type: ActivityType;
   timestamp: number; // ms epoch
-  ageGroup?: AgeGroup;
 }
 
 export interface ActivityDef {

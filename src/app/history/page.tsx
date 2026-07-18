@@ -89,6 +89,11 @@ export default function HistoryPage() {
                       />
                       <span className="flex-1 text-sm text-stone-700">
                         {def?.label ?? a.type}
+                        {a.customerStatus && (
+                          <span className="ml-1 font-semibold text-stone-500">
+                            （{a.customerStatus}）
+                          </span>
+                        )}
                         {a.ageGroup && (
                           <span className="ml-1 font-semibold text-stone-500">
                             （{a.ageGroup}）
