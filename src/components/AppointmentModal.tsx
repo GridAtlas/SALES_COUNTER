@@ -62,37 +62,43 @@ export function AppointmentModal({ onSave, onCancel }: Props) {
 
         <label className="mt-2 block min-w-0 text-xs font-semibold text-stone-600">
           日付
-          <input
-            type="date"
-            value={appointmentDate}
-            onChange={(event) => setAppointmentDate(event.target.value)}
-            required
-            className="appointment-field mt-1 min-h-11 rounded-xl border border-stone-300 bg-white px-3 text-stone-700"
-          />
+          <span className="appointment-field-shell mt-1">
+            <input
+              type="date"
+              value={appointmentDate}
+              onChange={(event) => setAppointmentDate(event.target.value)}
+              required
+              className="appointment-native-field text-stone-700"
+            />
+          </span>
         </label>
 
         <div className="appointment-time-grid mt-2 grid min-w-0 grid-cols-2 gap-2">
           <label className="block min-w-0 text-xs font-semibold text-stone-600">
             開始時間
-            <input
-              type="time"
-              value={appointmentStartTime}
-              onChange={(event) => setAppointmentStartTime(event.target.value)}
-              step={900}
-              required
-              className="appointment-field mt-1 min-h-11 rounded-xl border border-stone-300 bg-white px-3 text-stone-700"
-            />
+            <span className="appointment-field-shell mt-1">
+              <input
+                type="time"
+                value={appointmentStartTime}
+                onChange={(event) => setAppointmentStartTime(event.target.value)}
+                step={900}
+                required
+                className="appointment-native-field text-stone-700"
+              />
+            </span>
           </label>
           <label className="block min-w-0 text-xs font-semibold text-stone-600">
             終了時間
-            <input
-              type="time"
-              value={appointmentEndTime}
-              onChange={(event) => setAppointmentEndTime(event.target.value)}
-              step={900}
-              required
-              className="appointment-field mt-1 min-h-11 rounded-xl border border-stone-300 bg-white px-3 text-stone-700"
-            />
+            <span className="appointment-field-shell mt-1">
+              <input
+                type="time"
+                value={appointmentEndTime}
+                onChange={(event) => setAppointmentEndTime(event.target.value)}
+                step={900}
+                required
+                className="appointment-native-field text-stone-700"
+              />
+            </span>
           </label>
         </div>
 

@@ -59,7 +59,6 @@ import type {
 } from '@/types';
 
 const AUTO_EVENT_GAP_MS = 10_000;
-const SAME_HOUSEHOLD_PRESS_WINDOW_MS = 60_000;
 
 const localDateKey = (timestamp: number) => {
   const date = new Date(timestamp);
@@ -997,15 +996,8 @@ export default function HomePage() {
         (activity) => activity.type === 'interphone_response',
       );
       const awaitingResponse = Boolean(lastPress && !responded);
-      const reuse =
-        awaitingResponse &&
-        lastPress !== undefined &&
-        now - lastPress.timestamp <= SAME_HOUSEHOLD_PRESS_WINDOW_MS;
       return {
-        selectedSessionId:
-          reuse && reusableActiveSessionId
-            ? reusableActiveSessionId
-            : sessionId(),
+        selectedSessionId: sessionId(),
         closePressId: awaitingResponse ? lastPress?.id : undefined,
       };
     }
@@ -1100,11 +1092,11 @@ export default function HomePage() {
   };
 
   const handleStageTimingSelect = (
-    answer: '今日（今回を含む）' | '今日より前',
+    answer: '今日' | '今日より前',
   ) => {
     if (!funnelFlow || funnelFlow.modal?.kind !== 'stage_timing') return;
     const { stage, timing } = funnelFlow.modal;
-    if (answer === '今日（今回を含む）') {
+    if (answer === '今日') {
       const startIndex = HISTORICAL_STAGE_ORDER.indexOf(stage);
       const targetIndex = HISTORICAL_STAGE_ORDER.indexOf(timing.targetStage);
       const todayTasks = HISTORICAL_STAGE_ORDER
@@ -1540,7 +1532,7 @@ export default function HomePage() {
             HISTORICAL_STAGE_LABELS[funnelFlow.modal.stage] +
             '」したのはいつですか？'
           }
-          options={['今日（今回を含む）', '今日より前'] as const}
+          options={['今日', '今日より前'] as const}
           onSelect={handleStageTimingSelect}
           onCancel={cancelFunnelFlow}
         />
