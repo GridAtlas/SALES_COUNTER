@@ -13,14 +13,14 @@ export function ActivityEndButton({ disabled, onTap }: Props) {
       type="button"
       onClick={onTap}
       disabled={disabled}
-      className="tap-target flex h-12 flex-col items-center justify-center rounded-xl bg-rose-600 px-1 py-0 text-white shadow-sm active:bg-rose-700 disabled:opacity-40"
+      className="counter-action-button tap-target flex flex-col items-center justify-center rounded-xl bg-rose-600 px-1 py-0 text-white shadow-sm active:bg-rose-700 disabled:opacity-40"
       aria-label="活動終了"
     >
-      <Power size={17} strokeWidth={2.2} />
-      <span className="whitespace-nowrap text-[11px] font-semibold leading-tight">
+      <Power size={22} strokeWidth={2.2} className="counter-action-icon" />
+      <span className="counter-action-label whitespace-nowrap font-semibold">
         活動終了
       </span>
-      <span className="text-[10px] font-bold leading-none">日報保存</span>
+      <span className="counter-action-note font-bold">日報保存</span>
     </button>
   );
 }

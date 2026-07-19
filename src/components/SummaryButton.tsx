@@ -12,14 +12,14 @@ export function SummaryButton({ totalCount, onTap }: Props) {
     <button
       type="button"
       onClick={onTap}
-      className="tap-target flex h-12 flex-col items-center justify-center rounded-xl bg-slate-700 px-1 py-0 text-white shadow-sm active:bg-slate-800"
+      className="counter-action-button tap-target flex flex-col items-center justify-center rounded-xl bg-slate-700 px-1 py-0 text-white shadow-sm active:bg-slate-800"
       aria-label="集計"
     >
-      <BarChart3 size={17} strokeWidth={2.2} />
-      <span className="whitespace-nowrap text-[11px] font-semibold leading-tight">
+      <BarChart3 size={22} strokeWidth={2.2} className="counter-action-icon" />
+      <span className="counter-action-label whitespace-nowrap font-semibold">
         集計
       </span>
-      <span className="num text-base font-bold leading-none">{totalCount}</span>
+      <span className="counter-action-count num font-bold">{totalCount}</span>
     </button>
   );
 }

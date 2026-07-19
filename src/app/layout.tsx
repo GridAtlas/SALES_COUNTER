@@ -23,7 +23,7 @@ export default function RootLayout({
   return (
     <html lang="ja">
       <body>
-        <main className="max-w-md mx-auto min-h-dvh flex flex-col safe-top safe-bottom">
+        <main className="app-frame flex flex-col safe-top safe-bottom">
           {children}
         </main>
       </body>

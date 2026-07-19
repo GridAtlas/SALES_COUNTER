@@ -11,7 +11,7 @@ interface Props {
 
 export function BottomBar({ disableUndo, onUndo, onReset }: Props) {
   return (
-    <div className="mt-auto grid grid-cols-3 gap-2 p-3 border-t border-stone-200 bg-white/80 backdrop-blur">
+    <div className="app-bottom-bar mt-auto grid grid-cols-3 gap-2 border-t border-stone-200 bg-white/80 px-3 backdrop-blur">
       <button
         type="button"
         onClick={onUndo}

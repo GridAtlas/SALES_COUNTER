@@ -280,39 +280,48 @@ export default function HomePage() {
       />
 
       {activeView === 'counter' ? (
-        <div className="grid flex-1 content-start grid-cols-3 gap-x-2 gap-y-0.5 px-2">
-          <h2 className="col-span-3 text-xs font-bold leading-4 text-slate-500">
-            🔲 移動・休憩
-          </h2>
-          {ACTIVITIES.slice(0, 6).map((def) => (
-            <ActivityButton
-              key={def.type}
-              def={def}
-              count={countOf(def.type)}
-              onTap={() => handleTap(def.type)}
-            />
-          ))}
+        <div className="counter-frame">
+          <section className="counter-section">
+            <h2 className="counter-section-title">🔲 移動・休憩</h2>
+            <div className="counter-button-grid counter-button-grid--movement">
+              {ACTIVITIES.slice(0, 6).map((def) => (
+                <ActivityButton
+                  key={def.type}
+                  def={def}
+                  count={countOf(def.type)}
+                  onTap={() => handleTap(def.type)}
+                />
+              ))}
+            </div>
+          </section>
 
-          <h2 className="col-span-3 mt-0.5 text-xs font-bold leading-4 text-slate-500">
-            🔲 営業活動
-          </h2>
-          {ACTIVITIES.slice(6).map((def) => (
-            <ActivityButton
-              key={def.type}
-              def={def}
-              count={countOf(def.type)}
-              onTap={() => handleTap(def.type)}
-            />
-          ))}
+          <section className="counter-section">
+            <h2 className="counter-section-title">🔲 営業活動</h2>
+            <div className="counter-button-grid counter-button-grid--sales">
+              {ACTIVITIES.slice(6).map((def) => (
+                <ActivityButton
+                  key={def.type}
+                  def={def}
+                  count={countOf(def.type)}
+                  onTap={() => handleTap(def.type)}
+                />
+              ))}
+            </div>
+          </section>
 
-          <h2 className="col-span-3 mt-0.5 text-xs font-bold leading-4 text-slate-500">
-            🔲 集計・報告
-          </h2>
-          <SummaryButton totalCount={total} onTap={() => setShowSummary(true)} />
-          <ActivityEndButton
-            disabled={todaysActivities.length === 0}
-            onTap={() => setShowActivityEnd(true)}
-          />
+          <section className="counter-section">
+            <h2 className="counter-section-title">🔲 集計・報告</h2>
+            <div className="counter-button-grid counter-button-grid--report">
+              <SummaryButton
+                totalCount={total}
+                onTap={() => setShowSummary(true)}
+              />
+              <ActivityEndButton
+                disabled={todaysActivities.length === 0}
+                onTap={() => setShowActivityEnd(true)}
+              />
+            </div>
+          </section>
         </div>
       ) : activeView === 'appointments' ? (
         <AppointmentList appointments={appointments} hydrated={hydrated} />

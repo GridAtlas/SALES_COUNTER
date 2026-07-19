@@ -68,7 +68,7 @@ export function ActivityButton({ def, count, onTap }: Props) {
       onClick={handleTap}
       className={[
         'tap-target relative flex flex-col items-center justify-center',
-        'h-12 rounded-xl px-1 py-0 shadow-sm select-none',
+        'counter-action-button rounded-xl px-1 py-0 shadow-sm select-none',
         `bg-${color}-500 active:bg-${color}-600`,
         'text-white font-semibold',
         'transition-transform duration-150',
@@ -76,9 +76,9 @@ export function ActivityButton({ def, count, onTap }: Props) {
       ].join(' ')}
       aria-label={def.label}
     >
-      <Icon size={17} strokeWidth={2.2} />
-      <span className="text-[11px] leading-tight whitespace-nowrap">{def.label}</span>
-      <span className="num text-base leading-none">{count}</span>
+      <Icon size={22} strokeWidth={2.2} className="counter-action-icon" />
+      <span className="counter-action-label whitespace-nowrap">{def.label}</span>
+      <span className="counter-action-count num">{count}</span>
     </button>
   );
 }

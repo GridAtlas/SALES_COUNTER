@@ -34,7 +34,7 @@ export function ViewTabs({
 
   return (
     <div
-      className="mx-2 mb-1 grid grid-cols-4 rounded-xl bg-stone-200/80 p-1"
+      className="app-tabs mx-2 mb-1 grid grid-cols-4 rounded-xl bg-stone-200/80 p-1"
       role="tablist"
       aria-label="画面切り替え"
     >
