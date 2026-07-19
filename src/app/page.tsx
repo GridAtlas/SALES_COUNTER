@@ -26,7 +26,6 @@ import {
   APPOINTMENT_ACQUISITION_KINDS,
   APPOINTMENT_VISIT_KINDS,
   getActivityDef,
-  INTERPHONE_RESPONSE_KINDS,
   PRESENTATION_ENTRY_KINDS,
   SALE_ENTRY_KINDS,
 } from '@/lib/constants';
@@ -49,10 +48,8 @@ import type {
   AppointmentDetails,
   AppointmentVisitKind,
   CustomerStatus,
-  FaceContactKind,
   FunnelStage,
   GpsDetails,
-  InterphoneResponseKind,
   PresentationEntryKind,
   PresentationLocation,
   PriorStageDetails,
@@ -178,7 +175,6 @@ type FlowTask =
 
 type FlowModal =
   | { kind: 'customer_status'; prior?: PriorDetailContext }
-  | { kind: 'interphone_response'; prior?: PriorDetailContext }
   | { kind: 'face_contact'; prior?: PriorDetailContext }
   | {
       kind: 'appointment_source';
@@ -697,9 +693,13 @@ export default function HomePage() {
 
       if (task.kind === 'interphone_response') {
         if (sessionHasType(next, 'interphone_response')) continue;
-        next.modal = { kind: 'interphone_response' };
-        setFunnelFlow(next);
-        return;
+        next.planned.push({
+          id: flowId(),
+          type: 'interphone_response',
+          details: {},
+          recordSource: recordSourceFor(next, 'interphone_response'),
+        });
+        continue;
       }
 
       if (task.kind === 'ensure_face_contact') {
@@ -785,22 +785,6 @@ export default function HomePage() {
 
       if (task.kind === 'appointment_visit') {
         if (sessionHasType(next, 'appointment_visit')) continue;
-        if (
-          !sessionHasType(next, 'appointment') &&
-          !task.historyChecked &&
-          canAskHistorical(next, 'appointment')
-        ) {
-          next.modal = stageTimingModal(
-              next,
-              'appointment',
-              {
-              kind: 'appointment_visit',
-              historyChecked: true,
-            },
-            );
-          setFunnelFlow(next);
-          return;
-        }
         next.modal = { kind: 'appointment_visit_kind' };
         setFunnelFlow(next);
         return;
@@ -1108,18 +1092,20 @@ export default function HomePage() {
     }
 
     const prior: PriorDetailContext = { stage, timing };
+    if (stage === 'interphone_response') {
+      completePriorStageCapture(prior, {});
+      return;
+    }
     const modal: FlowModal =
       stage === 'interphone'
         ? { kind: 'customer_status', prior }
-        : stage === 'interphone_response'
-          ? { kind: 'interphone_response', prior }
-          : stage === 'face_to_face_contact'
-            ? { kind: 'face_contact', prior }
-            : stage === 'appointment'
-              ? { kind: 'appointment_source', prior }
-              : stage === 'appointment_visit'
-                ? { kind: 'appointment_visit_kind', prior }
-                : { kind: 'presentation_location', prior };
+        : stage === 'face_to_face_contact'
+          ? { kind: 'face_contact', prior }
+          : stage === 'appointment'
+            ? { kind: 'appointment_source', prior }
+            : stage === 'appointment_visit'
+              ? { kind: 'appointment_visit_kind', prior }
+              : { kind: 'presentation_location', prior };
     setFunnelFlow({ ...funnelFlow, modal });
   };
 
@@ -1168,37 +1154,10 @@ export default function HomePage() {
     ]);
   };
 
-  const handleInterphoneResponseSelect = (
-    interphoneResponseKind: InterphoneResponseKind,
-  ) => {
-    if (!funnelFlow || funnelFlow.modal?.kind !== 'interphone_response') return;
-    if (funnelFlow.modal.prior) {
-      completePriorStageCapture(funnelFlow.modal.prior, {
-        interphoneResponseKind,
-      });
-      return;
-    }
-    continueFunnelFlow([
-      ...funnelFlow.planned,
-      {
-        id: flowId(),
-        type: 'interphone_response',
-        details: { interphoneResponseKind },
-        recordSource: recordSourceFor(funnelFlow, 'interphone_response'),
-      },
-    ]);
-  };
-
-  const handleFaceContactSave = (
-    faceContactKind: FaceContactKind,
-    ageGroup: AgeGroup,
-  ) => {
+  const handleFaceContactSave = (ageGroup: AgeGroup) => {
     if (!funnelFlow || funnelFlow.modal?.kind !== 'face_contact') return;
     if (funnelFlow.modal.prior) {
-      completePriorStageCapture(funnelFlow.modal.prior, {
-        faceContactKind,
-        ageGroup,
-      });
+      completePriorStageCapture(funnelFlow.modal.prior, { ageGroup });
       return;
     }
     continueFunnelFlow([
@@ -1206,7 +1165,7 @@ export default function HomePage() {
       {
         id: flowId(),
         type: 'face_to_face_contact',
-        details: { faceContactKind, ageGroup },
+        details: { ageGroup },
         recordSource: recordSourceFor(funnelFlow, 'face_to_face_contact'),
       },
     ]);
@@ -1333,7 +1292,6 @@ export default function HomePage() {
       sessionId: targetSessionId,
       planned: isPlannedAppointment ? funnelFlow.planned : [],
       tasks: [
-        { kind: 'ensure_face_contact' },
         {
           kind: 'append_appointment_visit',
           visitKind,
@@ -1611,20 +1569,6 @@ export default function HomePage() {
       {funnelFlow?.modal?.kind === 'customer_status' && (
         <CustomerStatusModal
           onSelect={handleCustomerStatusSelect}
-          onCancel={cancelFunnelFlow}
-        />
-      )}
-
-      {funnelFlow?.modal?.kind === 'interphone_response' && (
-        <ChoiceModal
-          title="インターホン応答"
-          description={
-            funnelFlow.modal.prior
-              ? '初めて応答した時の回数区分を選択してください'
-              : '応答回数を選択してください'
-          }
-          options={INTERPHONE_RESPONSE_KINDS}
-          onSelect={handleInterphoneResponseSelect}
           onCancel={cancelFunnelFlow}
         />
       )}

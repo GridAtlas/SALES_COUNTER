@@ -1,17 +1,15 @@
 'use client';
 
 import { useState } from 'react';
-import { AGE_GROUPS, FACE_CONTACT_KINDS } from '@/lib/constants';
-import type { AgeGroup, FaceContactKind } from '@/types';
+import { AGE_GROUPS } from '@/lib/constants';
+import type { AgeGroup } from '@/types';
 
 interface Props {
-  onSave: (faceContactKind: FaceContactKind, ageGroup: AgeGroup) => void;
+  onSave: (ageGroup: AgeGroup) => void;
   onCancel: () => void;
 }
 
 export function FaceContactModal({ onSave, onCancel }: Props) {
-  const [faceContactKind, setFaceContactKind] =
-    useState<FaceContactKind | null>(null);
   const [ageGroup, setAgeGroup] = useState<AgeGroup | null>(null);
 
   return (
@@ -29,32 +27,10 @@ export function FaceContactModal({ onSave, onCancel }: Props) {
           対面接触
         </h2>
         <p className="mt-1 text-center text-xs text-stone-500">
-          接触回数と年代を選択してください
+          年代を選択してください
         </p>
 
         <fieldset className="mt-4">
-          <legend className="text-xs font-bold text-stone-600">接触回数</legend>
-          <div className="mt-1.5 grid grid-cols-2 gap-2">
-            {FACE_CONTACT_KINDS.map((kind) => (
-              <button
-                key={kind}
-                type="button"
-                aria-pressed={faceContactKind === kind}
-                onClick={() => setFaceContactKind(kind)}
-                className={[
-                  'tap-target rounded-xl px-2 py-2 text-sm font-bold',
-                  faceContactKind === kind
-                    ? 'bg-sky-600 text-white'
-                    : 'bg-sky-50 text-sky-700 active:bg-sky-100',
-                ].join(' ')}
-              >
-                {kind}
-              </button>
-            ))}
-          </div>
-        </fieldset>
-
-        <fieldset className="mt-3">
           <legend className="text-xs font-bold text-stone-600">年代</legend>
           <div className="mt-1.5 grid grid-cols-3 gap-2">
             {AGE_GROUPS.map((group) => (
@@ -78,10 +54,10 @@ export function FaceContactModal({ onSave, onCancel }: Props) {
 
         <button
           type="button"
-          disabled={!faceContactKind || !ageGroup}
+          disabled={!ageGroup}
           onClick={() => {
-            if (faceContactKind && ageGroup) {
-              onSave(faceContactKind, ageGroup);
+            if (ageGroup) {
+              onSave(ageGroup);
             }
           }}
           className="tap-target mt-4 w-full rounded-xl bg-sky-600 px-3 py-2 text-sm font-bold text-white active:bg-sky-700 disabled:opacity-40"
