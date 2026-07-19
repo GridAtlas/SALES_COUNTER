@@ -48,7 +48,7 @@ export function AppointmentModal({ onSave, onCancel }: Props) {
         role="dialog"
         aria-modal="true"
         aria-labelledby="appointment-title"
-        className="appointment-dialog max-h-[calc(100dvh-1.5rem)] overflow-x-hidden overflow-y-auto rounded-2xl bg-white p-4 shadow-xl"
+        className="appointment-dialog max-h-[calc(100dvh-1rem)] overflow-x-hidden overflow-y-auto rounded-2xl bg-white p-3 shadow-xl"
       >
         <h2
           id="appointment-title"
@@ -60,7 +60,7 @@ export function AppointmentModal({ onSave, onCancel }: Props) {
           日付と時間帯を入力すると記録されます
         </p>
 
-        <label className="mt-4 block min-w-0 text-xs font-semibold text-stone-600">
+        <label className="mt-2 block min-w-0 text-xs font-semibold text-stone-600">
           日付
           <input
             type="date"
@@ -71,7 +71,7 @@ export function AppointmentModal({ onSave, onCancel }: Props) {
           />
         </label>
 
-        <div className="mt-3 grid min-w-0 grid-cols-1 gap-2">
+        <div className="appointment-time-grid mt-2 grid min-w-0 grid-cols-2 gap-2">
           <label className="block min-w-0 text-xs font-semibold text-stone-600">
             開始時間
             <input
@@ -102,15 +102,15 @@ export function AppointmentModal({ onSave, onCancel }: Props) {
           </p>
         )}
 
-        <label className="mt-3 block min-w-0 text-xs font-semibold text-stone-600">
+        <label className="mt-2 block min-w-0 text-xs font-semibold text-stone-600">
           メモ（任意）
           <textarea
             value={appointmentMemo}
             onChange={(event) => setAppointmentMemo(event.target.value)}
             maxLength={200}
-            rows={3}
+            rows={2}
             placeholder="訪問先や会話内容など"
-            className="appointment-field mt-1 resize-none rounded-xl border border-stone-300 bg-white p-3 text-stone-700"
+            className="appointment-field mt-1 resize-none rounded-xl border border-stone-300 bg-white p-2 text-stone-700"
           />
         </label>
 

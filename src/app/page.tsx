@@ -15,8 +15,6 @@ import { DailyReportList } from '@/components/DailyReportList';
 import { PresentationLocationModal } from '@/components/PresentationLocationModal';
 import { ProspectList } from '@/components/ProspectList';
 import { ProspectModal } from '@/components/ProspectModal';
-import { SummaryButton } from '@/components/SummaryButton';
-import { SummaryModal } from '@/components/SummaryModal';
 import { RejectionReasonModal } from '@/components/RejectionReasonModal';
 import { ViewTabs, type HomeView } from '@/components/ViewTabs';
 import { BottomBar } from '@/components/BottomBar';
@@ -26,10 +24,12 @@ import {
   APPOINTMENT_VISIT_KINDS,
   getActivityDef,
   INTERPHONE_RESPONSE_KINDS,
+  PRESENTATION_ENTRY_KINDS,
 } from '@/lib/constants';
 import { requestCurrentGps } from '@/lib/geolocation';
 import { useCounterStore } from '@/store/useCounterStore';
 import { useDailyReportStore } from '@/store/useDailyReportStore';
+import { useSettingsStore } from '@/store/useSettingsStore';
 import type {
   Activity,
   ActivityDetails,
@@ -41,6 +41,7 @@ import type {
   FaceContactKind,
   GpsDetails,
   InterphoneResponseKind,
+  PresentationEntryKind,
   PresentationLocation,
   ProspectRating,
   RejectionReason,
@@ -59,6 +60,8 @@ const appointmentSortKey = (activity: Activity) =>
     ? `${activity.appointmentDate}T${activity.appointmentStartTime ?? '23:59'}`
     : '9999-12-31T23:59';
 
+type AppointmentVisitFlow = 'standalone' | 'presentation';
+
 export default function HomePage() {
   // SSR ハイドレーション対策: localStorage を安全に読むため、初回は
   // 静的なゼロ値でレンダリング → mount 後に本物の store を反映。
@@ -69,9 +72,14 @@ export default function HomePage() {
   const [showInterphoneResponse, setShowInterphoneResponse] = useState(false);
   const [showAppointment, setShowAppointment] = useState(false);
   const [showAppointmentVisit, setShowAppointmentVisit] = useState(false);
+  const [appointmentVisitFlow, setAppointmentVisitFlow] =
+    useState<AppointmentVisitFlow>('standalone');
+  const [showPresentationEntryChoice, setShowPresentationEntryChoice] =
+    useState(false);
+  const [pendingPresentationEntryKind, setPendingPresentationEntryKind] =
+    useState<PresentationEntryKind | null>(null);
   const [showPresentationLocation, setShowPresentationLocation] = useState(false);
   const [showProspect, setShowProspect] = useState(false);
-  const [showSummary, setShowSummary] = useState(false);
   const [showAnalysis, setShowAnalysis] = useState(false);
   const [showActivityEnd, setShowActivityEnd] = useState(false);
   const [pendingRejectionType, setPendingRejectionType] =
@@ -89,6 +97,8 @@ export default function HomePage() {
   const saveDailyReport = useDailyReportStore(
     (state) => state.saveDailyReport,
   );
+  const gpsEnabled = useSettingsStore((state) => state.gpsEnabled);
+  const setGpsEnabled = useSettingsStore((state) => state.setGpsEnabled);
 
   const countOf = (type: string) =>
     hydrated ? activities.filter((activity) => activity.type === type).length : 0;
@@ -132,12 +142,20 @@ export default function HomePage() {
     [activities, hydrated],
   );
 
+  const createGpsPromise = (): Promise<GpsDetails> =>
+    gpsEnabled
+      ? requestCurrentGps()
+      : Promise.resolve({ gpsStatus: 'disabled' });
+
   const recordActivity = (
     type: ActivityType,
     details: ActivityDetails = {},
-    gpsPromise: Promise<GpsDetails> = requestCurrentGps(),
+    gpsPromise: Promise<GpsDetails> = createGpsPromise(),
   ) => {
-    const id = add(type, { ...details, gpsStatus: 'pending' });
+    const id = add(type, {
+      ...details,
+      gpsStatus: gpsEnabled ? 'pending' : 'disabled',
+    });
     void gpsPromise.then((gpsDetails) => updateActivity(id, gpsDetails));
   };
 
@@ -145,7 +163,7 @@ export default function HomePage() {
     type: ActivityType,
     details: ActivityDetails = {},
   ) => {
-    const gpsPromise = pendingGpsRef.current ?? requestCurrentGps();
+    const gpsPromise = pendingGpsRef.current ?? createGpsPromise();
     pendingGpsRef.current = null;
     recordActivity(type, details, gpsPromise);
   };
@@ -154,9 +172,18 @@ export default function HomePage() {
     pendingGpsRef.current = null;
   };
 
+  const cancelPresentationFlow = () => {
+    cancelPendingGps();
+    setShowPresentationEntryChoice(false);
+    setShowAppointmentVisit(false);
+    setAppointmentVisitFlow('standalone');
+    setPendingPresentationEntryKind(null);
+    setShowPresentationLocation(false);
+  };
+
   const handleTap = (type: ActivityType) => {
-    // GPS は活動ボタンを押した瞬間に取得開始。ポップアップの選択中も継続する。
-    const gpsPromise = requestCurrentGps();
+    // 設定ON時のみ、ボタンを押した瞬間にGPS取得を開始する。
+    const gpsPromise = createGpsPromise();
 
     if (type === 'interphone') {
       pendingGpsRef.current = gpsPromise;
@@ -180,6 +207,7 @@ export default function HomePage() {
     }
     if (type === 'appointment_visit') {
       pendingGpsRef.current = gpsPromise;
+      setAppointmentVisitFlow('standalone');
       setShowAppointmentVisit(true);
       return;
     }
@@ -194,7 +222,13 @@ export default function HomePage() {
     }
     if (type === 'presentation') {
       pendingGpsRef.current = gpsPromise;
-      setShowPresentationLocation(true);
+      const previousActivity = activities[activities.length - 1];
+      if (previousActivity?.type === 'appointment_visit') {
+        setPendingPresentationEntryKind('アポ訪問');
+        setShowPresentationLocation(true);
+      } else {
+        setShowPresentationEntryChoice(true);
+      }
       return;
     }
     if (type === 'prospect') {
@@ -231,17 +265,50 @@ export default function HomePage() {
     setActiveView('appointments');
   };
 
+  const handlePresentationEntrySelect = (
+    presentationEntryKind: PresentationEntryKind,
+  ) => {
+    setShowPresentationEntryChoice(false);
+    setPendingPresentationEntryKind(presentationEntryKind);
+    if (presentationEntryKind === '即プレゼン') {
+      setShowPresentationLocation(true);
+      return;
+    }
+    setAppointmentVisitFlow('presentation');
+    setShowAppointmentVisit(true);
+  };
+
   const handleAppointmentVisitSelect = (
     appointmentVisitKind: AppointmentVisitKind,
   ) => {
+    if (appointmentVisitFlow === 'presentation') {
+      const visitGpsPromise = pendingGpsRef.current ?? createGpsPromise();
+      pendingGpsRef.current = null;
+      recordActivity(
+        'appointment_visit',
+        { appointmentVisitKind },
+        visitGpsPromise,
+      );
+      pendingGpsRef.current = createGpsPromise();
+      setPendingPresentationEntryKind('アポ訪問');
+      setAppointmentVisitFlow('standalone');
+      setShowAppointmentVisit(false);
+      setShowPresentationLocation(true);
+      return;
+    }
     recordPendingActivity('appointment_visit', { appointmentVisitKind });
+    setAppointmentVisitFlow('standalone');
     setShowAppointmentVisit(false);
   };
 
   const handlePresentationLocationSelect = (
     presentationLocation: PresentationLocation,
   ) => {
-    recordPendingActivity('presentation', { presentationLocation });
+    recordPendingActivity('presentation', {
+      presentationEntryKind: pendingPresentationEntryKind ?? undefined,
+      presentationLocation,
+    });
+    setPendingPresentationEntryKind(null);
     setShowPresentationLocation(false);
   };
 
@@ -275,7 +342,10 @@ export default function HomePage() {
 
   return (
     <>
-      <Header totalCount={total} />
+      <Header
+        gpsEnabled={hydrated ? gpsEnabled : false}
+        onGpsEnabledChange={setGpsEnabled}
+      />
       <ViewTabs
         activeView={activeView}
         onChange={setActiveView}
@@ -315,12 +385,8 @@ export default function HomePage() {
           </section>
 
           <section className="counter-section">
-            <h2 className="counter-section-title">🔲 集計・報告</h2>
+            <h2 className="counter-section-title">🔲 分析・報告</h2>
             <div className="counter-button-grid counter-button-grid--report">
-              <SummaryButton
-                totalCount={total}
-                onTap={() => setShowSummary(true)}
-              />
               <AnalysisButton onTap={() => setShowAnalysis(true)} />
               <ActivityEndButton
                 disabled={todaysActivities.length === 0}
@@ -386,26 +452,30 @@ export default function HomePage() {
         />
       )}
 
+      {showPresentationEntryChoice && (
+        <ChoiceModal
+          title="プレゼン前確認"
+          description="今回のプレゼン種別を選択してください"
+          options={PRESENTATION_ENTRY_KINDS}
+          onSelect={handlePresentationEntrySelect}
+          onCancel={cancelPresentationFlow}
+        />
+      )}
+
       {showAppointmentVisit && (
         <ChoiceModal
           title="アポ訪問"
           description="アポ種別を選択すると記録されます"
           options={APPOINTMENT_VISIT_KINDS}
           onSelect={handleAppointmentVisitSelect}
-          onCancel={() => {
-            cancelPendingGps();
-            setShowAppointmentVisit(false);
-          }}
+          onCancel={cancelPresentationFlow}
         />
       )}
 
       {showPresentationLocation && (
         <PresentationLocationModal
           onSelect={handlePresentationLocationSelect}
-          onCancel={() => {
-            cancelPendingGps();
-            setShowPresentationLocation(false);
-          }}
+          onCancel={cancelPresentationFlow}
         />
       )}
 
@@ -416,13 +486,6 @@ export default function HomePage() {
             cancelPendingGps();
             setShowProspect(false);
           }}
-        />
-      )}
-
-      {showSummary && (
-        <SummaryModal
-          activities={activities}
-          onClose={() => setShowSummary(false)}
         />
       )}
 

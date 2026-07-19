@@ -46,6 +46,7 @@ const activityDetails = (activity: Activity): string[] => {
     faceContactKindOf(activity),
     activity.ageGroup,
     activity.appointmentVisitKind,
+    activity.presentationEntryKind,
     activity.presentationLocation,
     rejectionReason,
     appointmentSchedule,

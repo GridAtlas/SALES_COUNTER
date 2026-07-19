@@ -4,6 +4,7 @@ import type {
   AppointmentVisitKind,
   FaceContactKind,
   InterphoneResponseKind,
+  PresentationEntryKind,
   PresentationLocation,
   ProspectRating,
   RejectionReason,
@@ -29,8 +30,8 @@ export const ACTIVITIES: ActivityDef[] = [
   { type: 'pre_presentation_rejection', label: 'プレゼン前拒否', color: 'red', icon: 'CircleX' },
   { type: 'presentation', label: 'プレゼン', color: 'orange', icon: 'Presentation' },
   { type: 'post_presentation_rejection', label: 'プレゼン後拒否', color: 'red', icon: 'CircleX' },
-  { type: 'sale', label: 'セールス', color: 'emerald', icon: 'ShoppingBag' },
   { type: 'prospect', label: '保留／見込', color: 'amber', icon: 'Star' },
+  { type: 'sale', label: 'セールス', color: 'emerald', icon: 'ShoppingBag' },
 ];
 
 const LEGACY_ACTIVITIES: ActivityDef[] = [
@@ -66,6 +67,11 @@ export const APPOINTMENT_VISIT_KINDS: AppointmentVisitKind[] = [
   '当日取得アポ',
 ];
 
+export const PRESENTATION_ENTRY_KINDS: PresentationEntryKind[] = [
+  '即プレゼン',
+  'アポ訪問',
+];
+
 export const PROSPECT_RATINGS: ProspectRating[] = [1, 2, 3, 4, 5];
 
 export const PRESENTATION_LOCATIONS: PresentationLocation[] = [
@@ -78,7 +84,7 @@ export const REJECTION_REASONS: RejectionReason[] = [
   '営業されたくない',
   '必要性を感じない',
   '料金が高い',
-  'やるなら連絡する',
+  'タイミングが悪い',
   'その他',
 ];
 

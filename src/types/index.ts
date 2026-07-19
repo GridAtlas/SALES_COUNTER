@@ -41,6 +41,8 @@ export type InterphoneResponseKind = '初回応答' | '2回目以降';
 
 export type AppointmentVisitKind = '予定アポ' | '当日取得アポ';
 
+export type PresentationEntryKind = '即プレゼン' | 'アポ訪問';
+
 export type ProspectRating = 1 | 2 | 3 | 4 | 5;
 
 export type PresentationLocation = '玄関外' | '玄関内' | '宅内';
@@ -49,10 +51,12 @@ export type RejectionReason =
   | '営業されたくない'
   | '必要性を感じない'
   | '料金が高い'
-  | 'やるなら連絡する'
+  | 'タイミングが悪い'
+  | 'やるなら連絡する' // 旧データ互換
   | 'その他';
 
 export type GpsStatus =
+  | 'disabled'
   | 'pending'
   | 'captured'
   | 'denied'
@@ -81,6 +85,7 @@ export interface ActivityDetails {
   customerStatus?: CustomerStatus;
   interphoneResponseKind?: InterphoneResponseKind;
   appointmentVisitKind?: AppointmentVisitKind;
+  presentationEntryKind?: PresentationEntryKind;
   presentationLocation?: PresentationLocation;
   rejectionReason?: RejectionReason;
   rejectionReasonDetail?: string;
