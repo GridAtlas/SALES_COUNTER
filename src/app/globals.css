@@ -8,6 +8,7 @@
 
 html,
 body {
+  -webkit-text-size-adjust: 100%;
   -webkit-tap-highlight-color: transparent;
   -webkit-touch-callout: none;
   overscroll-behavior-y: contain;
@@ -161,4 +162,32 @@ body {
   font-size: 10px;
   font-size: clamp(10px, 1.3cqh, 12px);
   line-height: 1;
+}
+
+/* iPhone Safari の date/time 固有最小幅と入力フォーカス時ズームを抑える。 */
+.appointment-dialog {
+  box-sizing: border-box;
+  width: calc(100vw - 1.5rem);
+  max-width: 24rem;
+  min-width: 0;
+}
+
+.appointment-field {
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 16px;
+}
+
+.appointment-field::-webkit-date-and-time-value {
+  min-width: 0;
+  text-align: left;
+}
+
+.appointment-field::-webkit-calendar-picker-indicator {
+  margin: 0;
+  padding: 0;
 }

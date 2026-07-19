@@ -42,13 +42,13 @@ export function AppointmentModal({ onSave, onCancel }: Props) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-3">
       <form
         onSubmit={handleSubmit}
         role="dialog"
         aria-modal="true"
         aria-labelledby="appointment-title"
-        className="min-w-0 max-h-[calc(100dvh-2rem)] w-full max-w-sm overflow-x-hidden overflow-y-auto rounded-2xl bg-white p-4 shadow-xl"
+        className="appointment-dialog max-h-[calc(100dvh-1.5rem)] overflow-x-hidden overflow-y-auto rounded-2xl bg-white p-4 shadow-xl"
       >
         <h2
           id="appointment-title"
@@ -67,11 +67,11 @@ export function AppointmentModal({ onSave, onCancel }: Props) {
             value={appointmentDate}
             onChange={(event) => setAppointmentDate(event.target.value)}
             required
-            className="mt-1 block min-h-11 min-w-0 max-w-full w-full rounded-xl border border-stone-300 bg-white px-3 text-base text-stone-700"
+            className="appointment-field mt-1 min-h-11 rounded-xl border border-stone-300 bg-white px-3 text-stone-700"
           />
         </label>
 
-        <div className="mt-3 grid min-w-0 grid-cols-1 gap-2 min-[360px]:grid-cols-2">
+        <div className="mt-3 grid min-w-0 grid-cols-1 gap-2">
           <label className="block min-w-0 text-xs font-semibold text-stone-600">
             開始時間
             <input
@@ -80,7 +80,7 @@ export function AppointmentModal({ onSave, onCancel }: Props) {
               onChange={(event) => setAppointmentStartTime(event.target.value)}
               step={900}
               required
-              className="mt-1 block min-h-11 min-w-0 max-w-full w-full rounded-xl border border-stone-300 bg-white px-2 text-base text-stone-700"
+              className="appointment-field mt-1 min-h-11 rounded-xl border border-stone-300 bg-white px-3 text-stone-700"
             />
           </label>
           <label className="block min-w-0 text-xs font-semibold text-stone-600">
@@ -91,7 +91,7 @@ export function AppointmentModal({ onSave, onCancel }: Props) {
               onChange={(event) => setAppointmentEndTime(event.target.value)}
               step={900}
               required
-              className="mt-1 block min-h-11 min-w-0 max-w-full w-full rounded-xl border border-stone-300 bg-white px-2 text-base text-stone-700"
+              className="appointment-field mt-1 min-h-11 rounded-xl border border-stone-300 bg-white px-3 text-stone-700"
             />
           </label>
         </div>
@@ -110,7 +110,7 @@ export function AppointmentModal({ onSave, onCancel }: Props) {
             maxLength={200}
             rows={3}
             placeholder="訪問先や会話内容など"
-            className="mt-1 block min-w-0 max-w-full w-full resize-none rounded-xl border border-stone-300 bg-white p-3 text-base text-stone-700"
+            className="appointment-field mt-1 resize-none rounded-xl border border-stone-300 bg-white p-3 text-stone-700"
           />
         </label>
 
