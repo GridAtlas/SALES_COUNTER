@@ -2,11 +2,14 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityButton } from '@/components/ActivityButton';
+import { ActivityEndButton } from '@/components/ActivityEndButton';
+import { ActivityEndModal } from '@/components/ActivityEndModal';
 import { AgeGroupModal } from '@/components/AgeGroupModal';
 import { AppointmentList } from '@/components/AppointmentList';
 import { AppointmentModal } from '@/components/AppointmentModal';
 import { ChoiceModal } from '@/components/ChoiceModal';
 import { CustomerStatusModal } from '@/components/CustomerStatusModal';
+import { DailyReportList } from '@/components/DailyReportList';
 import { PresentationLocationModal } from '@/components/PresentationLocationModal';
 import { ProspectList } from '@/components/ProspectList';
 import { ProspectModal } from '@/components/ProspectModal';
@@ -24,6 +27,7 @@ import {
 } from '@/lib/constants';
 import { requestCurrentGps } from '@/lib/geolocation';
 import { useCounterStore } from '@/store/useCounterStore';
+import { useDailyReportStore } from '@/store/useDailyReportStore';
 import type {
   Activity,
   ActivityDetails,
@@ -38,6 +42,14 @@ import type {
   ProspectRating,
   RejectionReason,
 } from '@/types';
+
+const localDateKey = (timestamp: number) => {
+  const date = new Date(timestamp);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
 
 const appointmentSortKey = (activity: Activity) =>
   activity.appointmentDate
@@ -58,6 +70,7 @@ export default function HomePage() {
   const [showPresentationLocation, setShowPresentationLocation] = useState(false);
   const [showProspect, setShowProspect] = useState(false);
   const [showSummary, setShowSummary] = useState(false);
+  const [showActivityEnd, setShowActivityEnd] = useState(false);
   const [pendingRejectionType, setPendingRejectionType] =
     useState<ActivityType | null>(null);
   const pendingGpsRef = useRef<Promise<GpsDetails> | null>(null);
@@ -69,10 +82,27 @@ export default function HomePage() {
   const updateActivity = useCounterStore((state) => state.updateActivity);
   const undoLast = useCounterStore((state) => state.undoLast);
   const reset = useCounterStore((state) => state.reset);
+  const dailyReports = useDailyReportStore((state) => state.reports);
+  const saveDailyReport = useDailyReportStore(
+    (state) => state.saveDailyReport,
+  );
 
   const countOf = (type: string) =>
     hydrated ? activities.filter((activity) => activity.type === type).length : 0;
   const total = hydrated ? activities.length : 0;
+  const reportDate = localDateKey(Date.now());
+  const todaysActivities = useMemo(
+    () =>
+      hydrated
+        ? activities.filter(
+            (activity) => localDateKey(activity.timestamp) === reportDate,
+          )
+        : [],
+    [activities, hydrated, reportDate],
+  );
+  const existingTodayReport = hydrated
+    ? dailyReports.find((report) => report.date === reportDate)
+    : undefined;
 
   const appointments = useMemo(
     () =>
@@ -231,6 +261,13 @@ export default function HomePage() {
     setActiveView('prospects');
   };
 
+  const handleConfirmActivityEnd = () => {
+    if (todaysActivities.length === 0) return;
+    saveDailyReport(reportDate, todaysActivities, Date.now());
+    setShowActivityEnd(false);
+    setActiveView('reports');
+  };
+
   return (
     <>
       <Header totalCount={total} />
@@ -239,10 +276,11 @@ export default function HomePage() {
         onChange={setActiveView}
         appointmentCount={appointments.length}
         prospectCount={prospects.length}
+        reportCount={hydrated ? dailyReports.length : 0}
       />
 
       {activeView === 'counter' ? (
-        <div className="grid flex-1 content-start grid-cols-3 gap-x-2 gap-y-[3px] px-2">
+        <div className="grid flex-1 content-start grid-cols-3 gap-x-2 gap-y-0.5 px-2">
           <h2 className="col-span-3 text-xs font-bold leading-4 text-slate-500">
             🔲 移動・休憩
           </h2>
@@ -271,11 +309,17 @@ export default function HomePage() {
             🔲 集計・報告
           </h2>
           <SummaryButton totalCount={total} onTap={() => setShowSummary(true)} />
+          <ActivityEndButton
+            disabled={todaysActivities.length === 0}
+            onTap={() => setShowActivityEnd(true)}
+          />
         </div>
       ) : activeView === 'appointments' ? (
         <AppointmentList appointments={appointments} hydrated={hydrated} />
-      ) : (
+      ) : activeView === 'prospects' ? (
         <ProspectList prospects={prospects} hydrated={hydrated} />
+      ) : (
+        <DailyReportList reports={dailyReports} hydrated={hydrated} />
       )}
 
       <BottomBar
@@ -365,6 +409,16 @@ export default function HomePage() {
         <SummaryModal
           activities={activities}
           onClose={() => setShowSummary(false)}
+        />
+      )}
+
+      {showActivityEnd && (
+        <ActivityEndModal
+          activityCount={todaysActivities.length}
+          reportDate={reportDate}
+          willUpdate={Boolean(existingTodayReport)}
+          onConfirm={handleConfirmActivityEnd}
+          onCancel={() => setShowActivityEnd(false)}
         />
       )}
 

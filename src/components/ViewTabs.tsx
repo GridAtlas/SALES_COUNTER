@@ -1,14 +1,15 @@
 'use client';
 
-import { CalendarDays, LayoutGrid, Star } from 'lucide-react';
+import { CalendarDays, FileText, LayoutGrid, Star } from 'lucide-react';
 
-export type HomeView = 'counter' | 'appointments' | 'prospects';
+export type HomeView = 'counter' | 'appointments' | 'prospects' | 'reports';
 
 interface Props {
   activeView: HomeView;
   onChange: (view: HomeView) => void;
   appointmentCount: number;
   prospectCount: number;
+  reportCount: number;
 }
 
 export function ViewTabs({
@@ -16,10 +17,24 @@ export function ViewTabs({
   onChange,
   appointmentCount,
   prospectCount,
+  reportCount,
 }: Props) {
+  const tabClass = (view: HomeView, activeColor = 'text-stone-700') => [
+    'tap-target flex min-w-0 items-center justify-center gap-0.5 rounded-lg px-0.5 text-[9px] font-bold',
+    activeView === view
+      ? `bg-white ${activeColor} shadow-sm`
+      : 'text-stone-500',
+  ].join(' ');
+
+  const badge = (count: number) => (
+    <span className="num rounded-full bg-amber-100 px-1 py-0.5 text-[8px] text-amber-700">
+      {count}
+    </span>
+  );
+
   return (
     <div
-      className="mx-2 mb-1 grid grid-cols-3 rounded-xl bg-stone-200/80 p-1"
+      className="mx-2 mb-1 grid grid-cols-4 rounded-xl bg-stone-200/80 p-1"
       role="tablist"
       aria-label="画面切り替え"
     >
@@ -28,14 +43,9 @@ export function ViewTabs({
         role="tab"
         aria-selected={activeView === 'counter'}
         onClick={() => onChange('counter')}
-        className={[
-          'tap-target flex items-center justify-center gap-1 rounded-lg px-1 text-[10px] font-bold',
-          activeView === 'counter'
-            ? 'bg-white text-stone-700 shadow-sm'
-            : 'text-stone-500',
-        ].join(' ')}
+        className={tabClass('counter')}
       >
-        <LayoutGrid size={15} />
+        <LayoutGrid size={14} />
         カウンター
       </button>
       <button
@@ -43,36 +53,33 @@ export function ViewTabs({
         role="tab"
         aria-selected={activeView === 'appointments'}
         onClick={() => onChange('appointments')}
-        className={[
-          'tap-target flex items-center justify-center gap-1 rounded-lg px-1 text-[10px] font-bold',
-          activeView === 'appointments'
-            ? 'bg-white text-amber-700 shadow-sm'
-            : 'text-stone-500',
-        ].join(' ')}
+        className={tabClass('appointments', 'text-amber-700')}
       >
-        <CalendarDays size={15} />
+        <CalendarDays size={14} />
         アポ
-        <span className="num rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] text-amber-700">
-          {appointmentCount}
-        </span>
+        {badge(appointmentCount)}
       </button>
       <button
         type="button"
         role="tab"
         aria-selected={activeView === 'prospects'}
         onClick={() => onChange('prospects')}
-        className={[
-          'tap-target flex items-center justify-center gap-1 rounded-lg px-1 text-[10px] font-bold',
-          activeView === 'prospects'
-            ? 'bg-white text-amber-700 shadow-sm'
-            : 'text-stone-500',
-        ].join(' ')}
+        className={tabClass('prospects', 'text-amber-700')}
       >
-        <Star size={15} />
+        <Star size={14} />
         保留／見込
-        <span className="num rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] text-amber-700">
-          {prospectCount}
-        </span>
+        {badge(prospectCount)}
+      </button>
+      <button
+        type="button"
+        role="tab"
+        aria-selected={activeView === 'reports'}
+        onClick={() => onChange('reports')}
+        className={tabClass('reports', 'text-slate-700')}
+      >
+        <FileText size={14} />
+        日報
+        {badge(reportCount)}
       </button>
     </div>
   );

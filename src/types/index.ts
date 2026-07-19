@@ -99,6 +99,14 @@ export interface Activity extends ActivityDetails {
   timestamp: number; // ms epoch
 }
 
+export interface DailyReport {
+  id: string;
+  date: string;
+  endedAt: number;
+  savedAt: number;
+  activities: Activity[];
+}
+
 export interface ActivityDef {
   type: ActivityType;
   label: string;

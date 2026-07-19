@@ -35,7 +35,7 @@ export function BottomBar({ disableUndo, onUndo, onReset }: Props) {
       <button
         type="button"
         onClick={() => {
-          if (confirm('カウンターをリセットしますか？（履歴も全て削除）')) {
+          if (confirm('現在のカウンターと履歴をリセットしますか？（保存済みの日報は残ります）')) {
             onReset();
           }
         }}
