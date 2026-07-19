@@ -110,19 +110,29 @@ type PlannedActivity = {
   type: ActivityType;
   details: ActivityDetails;
   recordSource: ActivityRecordSource;
+  timestamp?: number;
 };
 
+type HistoricalStage =
+  | 'interphone'
+  | 'interphone_response'
+  | 'face_to_face_contact'
+  | 'appointment'
+  | 'appointment_visit'
+  | 'presentation';
+
 type FlowTask =
-  | { kind: 'ensure_interphone' }
+  | { kind: 'ensure_interphone'; historyChecked?: boolean }
   | { kind: 'interphone' }
-  | { kind: 'ensure_interphone_response' }
+  | { kind: 'ensure_interphone_response'; historyChecked?: boolean }
   | { kind: 'interphone_response' }
-  | { kind: 'ensure_face_contact' }
+  | { kind: 'ensure_face_contact'; historyChecked?: boolean }
   | { kind: 'face_contact' }
   | {
       kind: 'appointment';
       appointmentId: string;
       categoryOverride?: AppointmentVisitKind;
+      historyChecked?: boolean;
     }
   | {
       kind: 'appointment_form';
@@ -130,19 +140,23 @@ type FlowTask =
       acquisitionKind: AppointmentAcquisitionKind;
       categoryOverride?: AppointmentVisitKind;
     }
-  | { kind: 'appointment_visit' }
+  | { kind: 'appointment_visit'; historyChecked?: boolean }
   | {
       kind: 'append_appointment_visit';
       visitKind: AppointmentVisitKind;
       appointmentId: string;
       appointmentLabel?: string;
     }
-  | { kind: 'presentation' }
+  | { kind: 'presentation'; historyChecked?: boolean }
   | { kind: 'ensure_instant_appointment' }
   | { kind: 'ensure_instant_visit' }
   | { kind: 'presentation_location'; entryKind: PresentationEntryKind }
-  | { kind: 'prospect' }
-  | { kind: 'sale' }
+  | { kind: 'prospect'; historyChecked?: boolean }
+  | {
+      kind: 'sale';
+      historyChecked?: boolean;
+      forceEntryChoice?: boolean;
+    }
   | {
       kind: 'append_sale';
       entryKind?: SaleEntryKind;
@@ -175,7 +189,30 @@ type FlowModal =
   | { kind: 'presentation_location'; entryKind: PresentationEntryKind }
   | { kind: 'prospect' }
   | { kind: 'sale_entry' }
-  | { kind: 'prospect_target'; prospects: Activity[] };
+  | { kind: 'prospect_target'; prospects: Activity[] }
+  | {
+      kind: 'historical_check';
+      stage: HistoricalStage;
+      resumeTask: FlowTask;
+    };
+
+const HISTORICAL_STAGE_LABELS: Record<HistoricalStage, string> = {
+  interphone: 'インターホン押下',
+  interphone_response: 'インターホン応答',
+  face_to_face_contact: '対面接触',
+  appointment: 'アポ取得',
+  appointment_visit: 'アポ訪問',
+  presentation: 'プレゼン',
+};
+
+const HISTORICAL_STAGE_ORDER: HistoricalStage[] = [
+  'interphone',
+  'interphone_response',
+  'face_to_face_contact',
+  'appointment',
+  'appointment_visit',
+  'presentation',
+];
 
 interface FunnelFlow {
   sessionId: string;
@@ -244,11 +281,13 @@ export default function HomePage() {
     );
     return activities.filter(
       (activity) =>
-        activity.timestamp > periodStartedAt ||
-        Boolean(
-          activity.operationId &&
-            currentOperationIds.has(activity.operationId),
-        ),
+        activity.recordSource !== 'historical_confirmation' &&
+        (activity.timestamp > periodStartedAt ||
+          Boolean(
+            activity.recordSource === 'auto_backfill' &&
+              activity.operationId &&
+              currentOperationIds.has(activity.operationId),
+          )),
     );
   }, [activities, hydrated, periodStartedAt]);
   const countOf = (type: string) =>
@@ -272,7 +311,11 @@ export default function HomePage() {
     () =>
       hydrated
         ? activities
-            .filter((activity) => activity.type === 'appointment')
+            .filter(
+              (activity) =>
+                activity.type === 'appointment' &&
+                activity.recordSource !== 'historical_confirmation',
+            )
             .sort((left, right) => {
               const keyComparison = appointmentSortKey(left).localeCompare(
                 appointmentSortKey(right),
@@ -365,6 +408,32 @@ export default function HomePage() {
     flow.planned[flow.planned.length - 1] ??
     sessionActivitiesOf(flow)[sessionActivitiesOf(flow).length - 1];
 
+  const canAskHistorical = (
+    flow: FunnelFlow,
+    stage: HistoricalStage,
+  ) => {
+    const stageIndex = HISTORICAL_STAGE_ORDER.indexOf(stage);
+    const startOfToday = new Date(flow.anchorTimestamp);
+    startOfToday.setHours(0, 0, 0, 0);
+    const earlierStages = new Set(
+      HISTORICAL_STAGE_ORDER.slice(0, stageIndex),
+    );
+    const hasEarlierStageToday = [
+      ...sessionActivitiesOf(flow),
+      ...flow.planned.map((planned) => ({
+        ...planned.details,
+        id: planned.id,
+        type: planned.type,
+        timestamp: planned.timestamp ?? flow.anchorTimestamp,
+      })),
+    ].some(
+      (activity) =>
+        earlierStages.has(activity.type as HistoricalStage) &&
+        activity.timestamp >= startOfToday.getTime(),
+    );
+    return !hasEarlierStageToday;
+  };
+
   const recordSourceFor = (
     flow: FunnelFlow,
     type: ActivityType,
@@ -375,27 +444,34 @@ export default function HomePage() {
     const gpsPromise = pendingGpsRef.current ?? createGpsPromise();
     pendingGpsRef.current = null;
     const storedSessionActivities = sessionActivitiesOf(flow);
+    const currentPlanned = flow.planned.filter(
+      (planned) => planned.timestamp === undefined,
+    );
+    const currentCount = currentPlanned.length;
     const lastStoredTimestamp =
-      storedSessionActivities[storedSessionActivities.length - 1]?.timestamp;
-    const spacing =
-      lastStoredTimestamp === undefined
-        ? AUTO_EVENT_GAP_MS
-        : Math.max(
-            1,
-            Math.min(
-              AUTO_EVENT_GAP_MS,
-              Math.floor(
-                (flow.anchorTimestamp - lastStoredTimestamp) /
-                  Math.max(flow.planned.length, 1),
-              ),
-            ),
-          );
-    const firstTimestamp =
-      lastStoredTimestamp === undefined
-        ? flow.anchorTimestamp -
-          AUTO_EVENT_GAP_MS * (flow.planned.length - 1)
-        : lastStoredTimestamp + spacing;
-
+      storedSessionActivities.length > 0
+        ? Math.max(
+            ...storedSessionActivities.map((activity) => activity.timestamp),
+          )
+        : undefined;
+    const defaultFirstTimestamp =
+      flow.anchorTimestamp -
+      AUTO_EVENT_GAP_MS * Math.max(currentCount - 1, 0);
+    const needsCompression =
+      lastStoredTimestamp !== undefined &&
+      defaultFirstTimestamp <= lastStoredTimestamp;
+    const spacing = needsCompression
+      ? Math.max(
+          1,
+          Math.floor(
+            (flow.anchorTimestamp - lastStoredTimestamp!) /
+              Math.max(currentCount, 1),
+          ),
+        )
+      : AUTO_EVENT_GAP_MS;
+    const firstTimestamp = needsCompression
+      ? lastStoredTimestamp! + spacing
+      : defaultFirstTimestamp;
     if (flow.closePressId) {
       updateActivity(flow.closePressId, {
         interphoneAttemptOutcome: '無応答',
@@ -423,7 +499,14 @@ export default function HomePage() {
       }
     }
 
-    flow.planned.forEach((planned, index) => {
+    let currentIndex = 0;
+    flow.planned.forEach((planned) => {
+      const timestamp =
+        planned.timestamp ?? firstTimestamp + spacing * currentIndex++;
+      const plannedGpsPromise =
+        planned.recordSource === 'historical_confirmation'
+          ? Promise.resolve<GpsDetails>({ gpsStatus: 'unavailable' })
+          : gpsPromise;
       recordActivity(
         planned.type,
         {
@@ -432,8 +515,8 @@ export default function HomePage() {
           operationId: flow.operationId,
           recordSource: planned.recordSource,
         },
-        gpsPromise,
-        firstTimestamp + spacing * index,
+        plannedGpsPromise,
+        timestamp,
         planned.id,
       );
     });
@@ -457,6 +540,21 @@ export default function HomePage() {
 
       if (task.kind === 'ensure_interphone') {
         if (!sessionHasType(next, 'interphone')) {
+          if (
+            !task.historyChecked &&
+            canAskHistorical(next, 'interphone')
+          ) {
+            next.modal = {
+              kind: 'historical_check',
+              stage: 'interphone',
+              resumeTask: {
+                kind: 'ensure_interphone',
+                historyChecked: true,
+              },
+            };
+            setFunnelFlow(next);
+            return;
+          }
           next.tasks.unshift({ kind: 'interphone' });
         }
         continue;
@@ -470,6 +568,21 @@ export default function HomePage() {
 
       if (task.kind === 'ensure_interphone_response') {
         if (!sessionHasType(next, 'interphone_response')) {
+          if (
+            !task.historyChecked &&
+            canAskHistorical(next, 'interphone_response')
+          ) {
+            next.modal = {
+              kind: 'historical_check',
+              stage: 'interphone_response',
+              resumeTask: {
+                kind: 'ensure_interphone_response',
+                historyChecked: true,
+              },
+            };
+            setFunnelFlow(next);
+            return;
+          }
           next.tasks.unshift(
             { kind: 'ensure_interphone' },
             { kind: 'interphone_response' },
@@ -487,8 +600,26 @@ export default function HomePage() {
 
       if (task.kind === 'ensure_face_contact') {
         if (!sessionHasType(next, 'face_to_face_contact')) {
+          if (
+            !task.historyChecked &&
+            canAskHistorical(next, 'face_to_face_contact')
+          ) {
+            next.modal = {
+              kind: 'historical_check',
+              stage: 'face_to_face_contact',
+              resumeTask: {
+                kind: 'ensure_face_contact',
+                historyChecked: true,
+              },
+            };
+            setFunnelFlow(next);
+            return;
+          }
           next.tasks.unshift(
-            { kind: 'ensure_interphone_response' },
+            {
+              kind: 'ensure_interphone_response',
+              historyChecked: false,
+            },
             { kind: 'face_contact' },
           );
         }
@@ -511,6 +642,20 @@ export default function HomePage() {
             acquisitionKind: '対面取得',
             categoryOverride: task.categoryOverride,
           });
+        } else if (
+          !task.historyChecked &&
+          canAskHistorical(next, 'face_to_face_contact')
+        ) {
+          next.modal = {
+            kind: 'historical_check',
+            stage: 'face_to_face_contact',
+            resumeTask: {
+              ...task,
+              historyChecked: true,
+            },
+          };
+          setFunnelFlow(next);
+          return;
         } else {
           next.modal = {
             kind: 'appointment_source',
@@ -536,6 +681,22 @@ export default function HomePage() {
 
       if (task.kind === 'appointment_visit') {
         if (sessionHasType(next, 'appointment_visit')) continue;
+        if (
+          !sessionHasType(next, 'appointment') &&
+          !task.historyChecked &&
+          canAskHistorical(next, 'appointment')
+        ) {
+          next.modal = {
+            kind: 'historical_check',
+            stage: 'appointment',
+            resumeTask: {
+              kind: 'appointment_visit',
+              historyChecked: true,
+            },
+          };
+          setFunnelFlow(next);
+          return;
+        }
         next.modal = { kind: 'appointment_visit_kind' };
         setFunnelFlow(next);
         return;
@@ -564,7 +725,6 @@ export default function HomePage() {
           details: {
             appointmentAcquisitionKind: '対面取得',
             appointmentCategory: '当日取得アポ',
-            appointmentMemo: '即プレゼンによる自動補完',
           },
           recordSource: 'auto_backfill',
         });
@@ -580,7 +740,6 @@ export default function HomePage() {
           details: {
             appointmentVisitKind: '当日取得アポ',
             linkedAppointmentId: appointment?.id,
-            linkedAppointmentLabel: '即プレゼン補完',
           },
           recordSource: 'auto_backfill',
         });
@@ -594,6 +753,20 @@ export default function HomePage() {
             kind: 'presentation_location',
             entryKind: 'アポ訪問',
           });
+        } else if (
+          !task.historyChecked &&
+          canAskHistorical(next, 'appointment_visit')
+        ) {
+          next.modal = {
+            kind: 'historical_check',
+            stage: 'appointment_visit',
+            resumeTask: {
+              kind: 'presentation',
+              historyChecked: true,
+            },
+          };
+          setFunnelFlow(next);
+          return;
         } else {
           next.modal = { kind: 'presentation_entry' };
           setFunnelFlow(next);
@@ -618,14 +791,50 @@ export default function HomePage() {
           setFunnelFlow(next);
           return;
         }
-        next.tasks.unshift({ kind: 'presentation' }, { kind: 'prospect' });
+        if (
+          !task.historyChecked &&
+          canAskHistorical(next, 'presentation')
+        ) {
+          next.modal = {
+            kind: 'historical_check',
+            stage: 'presentation',
+            resumeTask: {
+              kind: 'prospect',
+              historyChecked: true,
+            },
+          };
+          setFunnelFlow(next);
+          return;
+        }
+        next.tasks.unshift(
+          { kind: 'presentation', historyChecked: true },
+          { kind: 'prospect', historyChecked: true },
+        );
         continue;
       }
 
       if (task.kind === 'sale') {
         if (sessionHasType(next, 'sale')) continue;
-        if (latestSessionActivity(next)?.type === 'presentation') {
+        if (
+          latestSessionActivity(next)?.type === 'presentation' &&
+          !task.forceEntryChoice
+        ) {
           next.tasks.unshift({ kind: 'append_sale' });
+        } else if (
+          !task.historyChecked &&
+          canAskHistorical(next, 'presentation')
+        ) {
+          next.modal = {
+            kind: 'historical_check',
+            stage: 'presentation',
+            resumeTask: {
+              kind: 'sale',
+              historyChecked: true,
+              forceEntryChoice: true,
+            },
+          };
+          setFunnelFlow(next);
+          return;
         } else {
           next.modal = { kind: 'sale_entry' };
           setFunnelFlow(next);
@@ -709,6 +918,7 @@ export default function HomePage() {
       modal: null,
     });
   };
+
   const continueFunnelFlow = (
     planned: PlannedActivity[],
     tasks = funnelFlow?.tasks ?? [],
@@ -720,6 +930,42 @@ export default function HomePage() {
       tasks,
       modal: null,
     });
+  };
+
+  const handleHistoricalCheckSelect = (answer: 'はい' | 'いいえ') => {
+    if (!funnelFlow || funnelFlow.modal?.kind !== 'historical_check') return;
+    const { stage, resumeTask } = funnelFlow.modal;
+    if (answer === 'いいえ') {
+      continueFunnelFlow(funnelFlow.planned, [
+        resumeTask,
+        ...funnelFlow.tasks,
+      ]);
+      return;
+    }
+
+    const stageIndex = HISTORICAL_STAGE_ORDER.indexOf(stage);
+    const missingStages = HISTORICAL_STAGE_ORDER.slice(
+      0,
+      stageIndex + 1,
+    ).filter((type) => !sessionHasType(funnelFlow, type));
+    const startOfToday = new Date(funnelFlow.anchorTimestamp);
+    startOfToday.setHours(0, 0, 0, 0);
+    const firstTimestamp =
+      startOfToday.getTime() - AUTO_EVENT_GAP_MS * missingStages.length;
+    const historicalActivities: PlannedActivity[] = missingStages.map(
+      (type, index) => ({
+        id: flowId(),
+        type,
+        details: {},
+        recordSource: 'historical_confirmation',
+        timestamp: firstTimestamp + AUTO_EVENT_GAP_MS * index,
+      }),
+    );
+
+    continueFunnelFlow(
+      [...funnelFlow.planned, ...historicalActivities],
+      [resumeTask, ...funnelFlow.tasks],
+    );
   };
 
   const handleTap = (type: ActivityType) => {
@@ -860,7 +1106,21 @@ export default function HomePage() {
         )
         .map((activity) => activity.sessionId!),
     );
-    const matchingAppointments = appointments.filter(
+    const plannedAppointments: Activity[] = funnelFlow.planned
+      .filter((planned) => planned.type === 'appointment')
+      .map((planned) => ({
+        id: planned.id,
+        type: planned.type,
+        timestamp: planned.timestamp ?? funnelFlow.anchorTimestamp,
+        ...planned.details,
+        sessionId: funnelFlow.sessionId,
+        operationId: funnelFlow.operationId,
+        recordSource: planned.recordSource,
+      }));
+    const matchingAppointments = [
+      ...appointments,
+      ...plannedAppointments,
+    ].filter(
       (appointment) =>
         appointmentCategoryOf(appointment) === appointmentVisitKind &&
         (!appointment.sessionId ||
@@ -880,10 +1140,13 @@ export default function HomePage() {
     if (!funnelFlow || funnelFlow.modal?.kind !== 'appointment_target') return;
     const visitKind = funnelFlow.modal.visitKind;
     const targetSessionId = appointment.sessionId ?? funnelFlow.sessionId;
+    const isPlannedAppointment = funnelFlow.planned.some(
+      (planned) => planned.id === appointment.id,
+    );
     advanceFunnelFlow({
       ...funnelFlow,
       sessionId: targetSessionId,
-      planned: [],
+      planned: isPlannedAppointment ? funnelFlow.planned : [],
       tasks: [
         { kind: 'ensure_face_contact' },
         {
@@ -972,7 +1235,7 @@ export default function HomePage() {
       return;
     }
     continueFunnelFlow(funnelFlow.planned, [
-      { kind: 'presentation' },
+      { kind: 'presentation', historyChecked: true },
       { kind: 'append_sale', entryKind: saleEntryKind },
       ...funnelFlow.tasks,
     ]);
@@ -1005,7 +1268,7 @@ export default function HomePage() {
   const handleProspectTargetNewPresentation = () => {
     if (!funnelFlow) return;
     continueFunnelFlow(funnelFlow.planned, [
-      { kind: 'presentation' },
+      { kind: 'presentation', historyChecked: true },
       { kind: 'append_sale', entryKind: '新規プレゼン' },
       ...funnelFlow.tasks,
     ]);
@@ -1118,6 +1381,20 @@ export default function HomePage() {
         onReset={reset}
       />
 
+      {funnelFlow?.modal?.kind === 'historical_check' && (
+        <ChoiceModal
+          title="前日以前の活動確認"
+          description={
+            '「' +
+            HISTORICAL_STAGE_LABELS[funnelFlow.modal.stage] +
+            '」は前日以前に実施済みですか？'
+          }
+          options={['はい', 'いいえ'] as const}
+          onSelect={handleHistoricalCheckSelect}
+          onCancel={cancelFunnelFlow}
+        />
+      )}
+
       {funnelFlow?.modal?.kind === 'customer_status' && (
         <CustomerStatusModal
           onSelect={handleCustomerStatusSelect}
@@ -1207,6 +1484,7 @@ export default function HomePage() {
           onCancel={cancelFunnelFlow}
         />
       )}
+
       {funnelFlow?.modal?.kind === 'presentation_location' && (
         <PresentationLocationModal
           onSelect={handlePresentationLocationSelect}

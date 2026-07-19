@@ -60,7 +60,11 @@ export type RejectionReason =
   | 'やるなら連絡する' // 旧データ互換
   | 'その他';
 
-export type ActivityRecordSource = 'manual' | 'auto_backfill' | 'legacy';
+export type ActivityRecordSource =
+  | 'manual'
+  | 'auto_backfill'
+  | 'historical_confirmation'
+  | 'legacy';
 
 export type InterphoneAttemptOutcome = '無応答' | '応答';
 

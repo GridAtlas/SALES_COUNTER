@@ -51,80 +51,32 @@ export function AnalysisModal({ activities, onClose }: Props) {
   const pressCount = activities.filter(
     (activity) => activity.type === 'interphone',
   ).length;
-  const pressedHouseholds = sessionsFor(
-    (activity) => activity.type === 'interphone',
-  ).size;
   const noResponsePresses = activities.filter(
     (activity) =>
       activity.type === 'interphone' &&
       activity.interphoneAttemptOutcome === '無応答',
   ).length;
 
-  const stageSessions = (type: ActivityType) =>
-    sessionsFor((activity) => activity.type === type);
-
-  const prerequisiteChain: Partial<Record<ActivityType, ActivityType[]>> = {
-    interphone_response: ['interphone'],
-    face_to_face_contact: ['interphone', 'interphone_response'],
-    appointment: ['interphone', 'interphone_response', 'face_to_face_contact'],
-    appointment_visit: [
-      'interphone',
-      'interphone_response',
-      'face_to_face_contact',
-      'appointment',
-    ],
-    presentation: [
-      'interphone',
-      'interphone_response',
-      'face_to_face_contact',
-      'appointment',
-      'appointment_visit',
-    ],
-    prospect: [
-      'interphone',
-      'interphone_response',
-      'face_to_face_contact',
-      'appointment',
-      'appointment_visit',
-      'presentation',
-    ],
-    sale: [
-      'interphone',
-      'interphone_response',
-      'face_to_face_contact',
-      'appointment',
-      'appointment_visit',
-      'presentation',
-    ],
-  };
-
-  const reachedSessions = (type: ActivityType) => {
-    const reached = stageSessions(type);
-    for (const prerequisite of prerequisiteChain[type] ?? []) {
-      const prerequisiteSessions = stageSessions(prerequisite);
-      for (const id of reached) {
-        if (!prerequisiteSessions.has(id)) reached.delete(id);
-      }
-    }
-    return reached;
-  };
-
-  const countOf = (key: AnalysisCountKey) => {
-    if (key === 'interphone') return pressedHouseholds;
+  const sessionsForKey = (key: AnalysisCountKey) => {
     if (key === 'face_contact_total') {
-      return reachedSessions('face_to_face_contact').size;
+      return sessionsFor(
+        (activity) => activity.type === 'face_to_face_contact',
+      );
     }
     if (key === 'face_contact_initial') {
-      const initial = sessionsFor(
+      return sessionsFor(
         (activity) =>
           activity.type === 'face_to_face_contact' &&
           activity.faceContactKind === '初回',
       );
-      const reached = reachedSessions('face_to_face_contact');
-      return [...initial].filter((id) => reached.has(id)).length;
     }
-    return reachedSessions(key).size;
+    return sessionsFor((activity) => activity.type === key);
   };
+
+  const countOf = (key: AnalysisCountKey) => sessionsForKey(key).size;
+
+  const currentPresentationSessions = sessionsForKey('presentation');
+  const carryoverSales = [...sessionsForKey('sale')].filter((id) => !currentPresentationSessions.has(id)).length;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-3">
@@ -155,9 +107,12 @@ export function AnalysisModal({ activities, onClose }: Props) {
           <section>
             <div className="mb-1.5 flex items-end justify-between px-1">
               <h3 className="text-xs font-bold text-slate-500">営業ファネル</h3>
-              <p className="text-[10px] text-slate-400">
-                実押下 {pressCount}回・無応答 {noResponsePresses}回
-              </p>
+              <div className="text-right text-[10px] text-slate-400">
+                <p>実押下 {pressCount}回・無応答 {noResponsePresses}回</p>
+                {carryoverSales > 0 && (
+                  <p>前日以前からの持越し成約 {carryoverSales}件</p>
+                )}
+              </div>
             </div>
             <div className="grid grid-cols-4 gap-1.5">
               {FUNNEL_STEPS.map((step) => (
@@ -182,9 +137,17 @@ export function AnalysisModal({ activities, onClose }: Props) {
             </h3>
             <div className="grid grid-cols-2 gap-2">
               {METRICS.map((metric) => {
-                const numerator = countOf(metric.numerator);
-                const denominator = countOf(metric.denominator);
-                const rate = denominator > 0 ? (numerator / denominator) * 100 : null;
+                const denominatorSessions = sessionsForKey(
+                  metric.denominator,
+                );
+                const numerator = [
+                  ...sessionsForKey(metric.numerator),
+                ].filter((id) => denominatorSessions.has(id)).length;
+                const denominator = denominatorSessions.size;
+                const rate =
+                  denominator > 0
+                    ? (numerator / denominator) * 100
+                    : null;
                 return (
                   <div
                     key={metric.label}
@@ -211,7 +174,7 @@ export function AnalysisModal({ activities, onClose }: Props) {
           </section>
 
           <p className="mt-3 px-1 text-[10px] leading-relaxed text-slate-400">
-            押下回数以外は同じ世帯セッション内で各段階を1回だけ集計します。自動補完された到達も含みます。
+            同じ世帯セッション内の各段階は1回だけ集計します。前日以前からの持越しは当日の率計算から除外します。
           </p>
         </div>
       </div>
