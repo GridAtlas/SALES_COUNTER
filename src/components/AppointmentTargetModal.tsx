@@ -8,6 +8,7 @@ interface Props {
   appointments: Activity[];
   onSelect: (appointment: Activity) => void;
   onCreate: () => void;
+  fallbackLabel?: string;
   onCancel: () => void;
 }
 
@@ -26,6 +27,7 @@ export function AppointmentTargetModal({
   appointments,
   onSelect,
   onCreate,
+  fallbackLabel = '対象アポがない・新規登録',
   onCancel,
 }: Props) {
   return (
@@ -89,7 +91,7 @@ export function AppointmentTargetModal({
             className="tap-target flex w-full items-center justify-center gap-1.5 rounded-xl bg-amber-500 px-3 py-2 text-sm font-bold text-white active:bg-amber-600"
           >
             <MapPinHouse size={17} aria-hidden />
-            対象アポがない・新規登録
+            {fallbackLabel}
           </button>
           <button
             type="button"

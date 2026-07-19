@@ -103,6 +103,16 @@ export interface AppointmentDetails {
   appointmentMemo?: string;
 }
 
+export interface PriorStageDetails {
+  customerStatus?: CustomerStatus;
+  interphoneResponseKind?: InterphoneResponseKind;
+  faceContactKind?: FaceContactKind;
+  ageGroup?: AgeGroup;
+  appointmentAcquisitionKind?: AppointmentAcquisitionKind;
+  appointmentVisitKind?: AppointmentVisitKind;
+  presentationLocation?: PresentationLocation;
+}
+
 export interface ActivityDetails {
   ageGroup?: AgeGroup;
   faceContactKind?: FaceContactKind;
@@ -132,6 +142,7 @@ export interface ActivityDetails {
   recordSource?: ActivityRecordSource;
   sessionOrigin?: SessionOrigin;
   priorReachedThrough?: Exclude<FunnelStage, 'sale'>;
+  priorStageDetails?: PriorStageDetails;
   gpsStatus?: GpsStatus;
   gpsLatitude?: number;
   gpsLongitude?: number;

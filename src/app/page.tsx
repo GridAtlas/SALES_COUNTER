@@ -55,6 +55,7 @@ import type {
   InterphoneResponseKind,
   PresentationEntryKind,
   PresentationLocation,
+  PriorStageDetails,
   ProspectRating,
   RejectionReason,
   SaleEntryKind,
@@ -122,6 +123,16 @@ type PlannedActivity = {
 
 type HistoricalStage = Exclude<FunnelStage, 'sale'>;
 
+interface StageTimingContext {
+  targetStage: HistoricalStage;
+  resumeTask: FlowTask;
+}
+
+interface PriorDetailContext {
+  stage: HistoricalStage;
+  timing: StageTimingContext;
+}
+
 type FlowTask =
   | { kind: 'ensure_interphone'; historyChecked?: boolean }
   | { kind: 'interphone' }
@@ -145,7 +156,7 @@ type FlowTask =
   | {
       kind: 'append_appointment_visit';
       visitKind: AppointmentVisitKind;
-      appointmentId: string;
+      appointmentId?: string;
       appointmentLabel?: string;
     }
   | { kind: 'presentation'; historyChecked?: boolean }
@@ -166,13 +177,14 @@ type FlowTask =
     };
 
 type FlowModal =
-  | { kind: 'customer_status' }
-  | { kind: 'interphone_response' }
-  | { kind: 'face_contact' }
+  | { kind: 'customer_status'; prior?: PriorDetailContext }
+  | { kind: 'interphone_response'; prior?: PriorDetailContext }
+  | { kind: 'face_contact'; prior?: PriorDetailContext }
   | {
       kind: 'appointment_source';
-      appointmentId: string;
+      appointmentId?: string;
       categoryOverride?: AppointmentVisitKind;
+      prior?: PriorDetailContext;
     }
   | {
       kind: 'appointment_form';
@@ -180,21 +192,25 @@ type FlowModal =
       acquisitionKind: AppointmentAcquisitionKind;
       categoryOverride?: AppointmentVisitKind;
     }
-  | { kind: 'appointment_visit_kind' }
+  | { kind: 'appointment_visit_kind'; prior?: PriorDetailContext }
   | {
       kind: 'appointment_target';
       visitKind: AppointmentVisitKind;
       appointments: Activity[];
     }
   | { kind: 'presentation_entry' }
-  | { kind: 'presentation_location'; entryKind: PresentationEntryKind }
+  | {
+      kind: 'presentation_location';
+      entryKind?: PresentationEntryKind;
+      prior?: PriorDetailContext;
+    }
   | { kind: 'prospect' }
   | { kind: 'sale_entry' }
   | { kind: 'prospect_target'; prospects: Activity[] }
   | {
-      kind: 'historical_check';
+      kind: 'stage_timing';
       stage: HistoricalStage;
-      resumeTask: FlowTask;
+      timing: StageTimingContext;
     };
 
 const HISTORICAL_STAGE_LABELS: Record<HistoricalStage, string> = {
@@ -208,6 +224,23 @@ const HISTORICAL_STAGE_LABELS: Record<HistoricalStage, string> = {
 
 const HISTORICAL_STAGE_ORDER = PREREQUISITE_STAGE_ORDER;
 
+const taskForHistoricalStage = (stage: HistoricalStage): FlowTask => {
+  if (stage === 'interphone') return { kind: 'interphone' };
+  if (stage === 'interphone_response') return { kind: 'interphone_response' };
+  if (stage === 'face_to_face_contact') return { kind: 'face_contact' };
+  if (stage === 'appointment') {
+    return {
+      kind: 'appointment',
+      appointmentId: flowId(),
+      historyChecked: true,
+    };
+  }
+  if (stage === 'appointment_visit') {
+    return { kind: 'appointment_visit', historyChecked: true };
+  }
+  return { kind: 'presentation', historyChecked: true };
+};
+
 interface FunnelFlow {
   sessionId: string;
   operationId: string;
@@ -216,6 +249,7 @@ interface FunnelFlow {
   anchorTimestamp: number;
   sessionOrigin?: SessionOrigin;
   priorReachedThrough?: HistoricalStage;
+  priorStageDetails?: PriorStageDetails;
   planned: PlannedActivity[];
   tasks: FlowTask[];
   modal: FlowModal | null;
@@ -415,6 +449,16 @@ export default function HomePage() {
     >((latest, stage) => laterStage(latest, stage), undefined);
   };
 
+  const priorStageDetailsOf = (flow: FunnelFlow): PriorStageDetails =>
+    [
+      ...sessionActivitiesOf(flow).map((activity) => activity.priorStageDetails),
+      ...flow.planned.map((activity) => activity.details.priorStageDetails),
+      flow.priorStageDetails,
+    ].reduce<PriorStageDetails>(
+      (details, current) => ({ ...details, ...(current ?? {}) }),
+      {},
+    );
+
   const sessionHasType = (flow: FunnelFlow, type: ActivityType) => {
     if (
       sessionActivitiesOf(flow).some((activity) => activity.type === type) ||
@@ -464,6 +508,22 @@ export default function HomePage() {
         activity.timestamp >= startOfToday.getTime(),
     );
     return !hasEarlierStageToday;
+  };
+
+  const stageTimingModal = (
+    flow: FunnelFlow,
+    targetStage: HistoricalStage,
+    resumeTask: FlowTask,
+  ): FlowModal => {
+    const targetIndex = HISTORICAL_STAGE_ORDER.indexOf(targetStage);
+    const firstMissingStage = HISTORICAL_STAGE_ORDER.slice(0, targetIndex + 1).find(
+      (stage) => !sessionHasType(flow, stage),
+    );
+    return {
+      kind: 'stage_timing',
+      stage: firstMissingStage ?? targetStage,
+      timing: { targetStage, resumeTask },
+    };
   };
 
   const recordSourceFor = (
@@ -535,6 +595,11 @@ export default function HomePage() {
     const sessionOrigin =
       flow.sessionOrigin ??
       (priorReachedThrough ? 'carryover' : undefined);
+    const collectedPriorStageDetails = priorStageDetailsOf(flow);
+    const priorStageDetails =
+      Object.keys(collectedPriorStageDetails).length > 0
+        ? collectedPriorStageDetails
+        : undefined;
     let currentIndex = 0;
     flow.planned.forEach((planned) => {
       const timestamp =
@@ -552,6 +617,7 @@ export default function HomePage() {
           recordSource: planned.recordSource,
           sessionOrigin,
           priorReachedThrough,
+          priorStageDetails,
         },
         plannedGpsPromise,
         timestamp,
@@ -582,14 +648,14 @@ export default function HomePage() {
             !task.historyChecked &&
             canAskHistorical(next, 'interphone')
           ) {
-            next.modal = {
-              kind: 'historical_check',
-              stage: 'interphone',
-              resumeTask: {
+            next.modal = stageTimingModal(
+              next,
+              'interphone',
+              {
                 kind: 'ensure_interphone',
                 historyChecked: true,
               },
-            };
+            );
             setFunnelFlow(next);
             return;
           }
@@ -610,14 +676,14 @@ export default function HomePage() {
             !task.historyChecked &&
             canAskHistorical(next, 'interphone_response')
           ) {
-            next.modal = {
-              kind: 'historical_check',
-              stage: 'interphone_response',
-              resumeTask: {
+            next.modal = stageTimingModal(
+              next,
+              'interphone_response',
+              {
                 kind: 'ensure_interphone_response',
                 historyChecked: true,
               },
-            };
+            );
             setFunnelFlow(next);
             return;
           }
@@ -642,14 +708,14 @@ export default function HomePage() {
             !task.historyChecked &&
             canAskHistorical(next, 'face_to_face_contact')
           ) {
-            next.modal = {
-              kind: 'historical_check',
-              stage: 'face_to_face_contact',
-              resumeTask: {
+            next.modal = stageTimingModal(
+              next,
+              'face_to_face_contact',
+              {
                 kind: 'ensure_face_contact',
                 historyChecked: true,
               },
-            };
+            );
             setFunnelFlow(next);
             return;
           }
@@ -684,14 +750,14 @@ export default function HomePage() {
           !task.historyChecked &&
           canAskHistorical(next, 'face_to_face_contact')
         ) {
-          next.modal = {
-            kind: 'historical_check',
-            stage: 'face_to_face_contact',
-            resumeTask: {
+          next.modal = stageTimingModal(
+              next,
+              'face_to_face_contact',
+              {
               ...task,
               historyChecked: true,
             },
-          };
+            );
           setFunnelFlow(next);
           return;
         } else {
@@ -724,14 +790,14 @@ export default function HomePage() {
           !task.historyChecked &&
           canAskHistorical(next, 'appointment')
         ) {
-          next.modal = {
-            kind: 'historical_check',
-            stage: 'appointment',
-            resumeTask: {
+          next.modal = stageTimingModal(
+              next,
+              'appointment',
+              {
               kind: 'appointment_visit',
               historyChecked: true,
             },
-          };
+            );
           setFunnelFlow(next);
           return;
         }
@@ -795,14 +861,14 @@ export default function HomePage() {
           !task.historyChecked &&
           canAskHistorical(next, 'appointment_visit')
         ) {
-          next.modal = {
-            kind: 'historical_check',
-            stage: 'appointment_visit',
-            resumeTask: {
+          next.modal = stageTimingModal(
+              next,
+              'appointment_visit',
+              {
               kind: 'presentation',
               historyChecked: true,
             },
-          };
+            );
           setFunnelFlow(next);
           return;
         } else {
@@ -833,14 +899,14 @@ export default function HomePage() {
           !task.historyChecked &&
           canAskHistorical(next, 'presentation')
         ) {
-          next.modal = {
-            kind: 'historical_check',
-            stage: 'presentation',
-            resumeTask: {
+          next.modal = stageTimingModal(
+              next,
+              'presentation',
+              {
               kind: 'prospect',
               historyChecked: true,
             },
-          };
+            );
           setFunnelFlow(next);
           return;
         }
@@ -862,15 +928,15 @@ export default function HomePage() {
           !task.historyChecked &&
           canAskHistorical(next, 'presentation')
         ) {
-          next.modal = {
-            kind: 'historical_check',
-            stage: 'presentation',
-            resumeTask: {
+          next.modal = stageTimingModal(
+              next,
+              'presentation',
+              {
               kind: 'sale',
               historyChecked: true,
               forceEntryChoice: true,
             },
-          };
+            );
           setFunnelFlow(next);
           return;
         } else {
@@ -983,28 +1049,78 @@ export default function HomePage() {
     });
   };
 
-  const handleHistoricalCheckSelect = (answer: 'はい' | 'いいえ') => {
-    if (!funnelFlow || funnelFlow.modal?.kind !== 'historical_check') return;
-    const { stage, resumeTask } = funnelFlow.modal;
-    if (answer === 'いいえ') {
-      continueFunnelFlow(funnelFlow.planned, [
-        resumeTask,
-        ...funnelFlow.tasks,
-      ]);
+  const completePriorStageCapture = (
+    prior: PriorDetailContext,
+    details: PriorStageDetails,
+  ) => {
+    if (!funnelFlow) return;
+    const updatedFlow: FunnelFlow = {
+      ...funnelFlow,
+      sessionOrigin: 'carryover',
+      priorReachedThrough: laterStage(
+        priorReachedThroughOf(funnelFlow),
+        prior.stage,
+      ) as HistoricalStage,
+      priorStageDetails: {
+        ...priorStageDetailsOf(funnelFlow),
+        ...details,
+      },
+      modal: null,
+    };
+    const currentIndex = HISTORICAL_STAGE_ORDER.indexOf(prior.stage);
+    const targetIndex = HISTORICAL_STAGE_ORDER.indexOf(
+      prior.timing.targetStage,
+    );
+    if (currentIndex < targetIndex) {
+      setFunnelFlow({
+        ...updatedFlow,
+        modal: {
+          kind: 'stage_timing',
+          stage: HISTORICAL_STAGE_ORDER[currentIndex + 1],
+          timing: prior.timing,
+        },
+      });
+      return;
+    }
+    advanceFunnelFlow({
+      ...updatedFlow,
+      tasks: [prior.timing.resumeTask, ...funnelFlow.tasks],
+    });
+  };
+
+  const handleStageTimingSelect = (
+    answer: '今日（今回を含む）' | '今日より前',
+  ) => {
+    if (!funnelFlow || funnelFlow.modal?.kind !== 'stage_timing') return;
+    const { stage, timing } = funnelFlow.modal;
+    if (answer === '今日（今回を含む）') {
+      const startIndex = HISTORICAL_STAGE_ORDER.indexOf(stage);
+      const targetIndex = HISTORICAL_STAGE_ORDER.indexOf(timing.targetStage);
+      const todayTasks = HISTORICAL_STAGE_ORDER
+        .slice(startIndex, targetIndex + 1)
+        .map(taskForHistoricalStage);
+      advanceFunnelFlow({
+        ...funnelFlow,
+        tasks: [...todayTasks, timing.resumeTask, ...funnelFlow.tasks],
+        modal: null,
+      });
       return;
     }
 
-    const priorReachedThrough = laterStage(
-      priorReachedThroughOf(funnelFlow),
-      stage,
-    ) as HistoricalStage;
-    advanceFunnelFlow({
-      ...funnelFlow,
-      sessionOrigin: 'carryover',
-      priorReachedThrough,
-      tasks: [resumeTask, ...funnelFlow.tasks],
-      modal: null,
-    });
+    const prior: PriorDetailContext = { stage, timing };
+    const modal: FlowModal =
+      stage === 'interphone'
+        ? { kind: 'customer_status', prior }
+        : stage === 'interphone_response'
+          ? { kind: 'interphone_response', prior }
+          : stage === 'face_to_face_contact'
+            ? { kind: 'face_contact', prior }
+            : stage === 'appointment'
+              ? { kind: 'appointment_source', prior }
+              : stage === 'appointment_visit'
+                ? { kind: 'appointment_visit_kind', prior }
+                : { kind: 'presentation_location', prior };
+    setFunnelFlow({ ...funnelFlow, modal });
   };
 
   const handleTap = (type: ActivityType) => {
@@ -1036,7 +1152,11 @@ export default function HomePage() {
   };
 
   const handleCustomerStatusSelect = (customerStatus: CustomerStatus) => {
-    if (!funnelFlow) return;
+    if (!funnelFlow || funnelFlow.modal?.kind !== 'customer_status') return;
+    if (funnelFlow.modal.prior) {
+      completePriorStageCapture(funnelFlow.modal.prior, { customerStatus });
+      return;
+    }
     continueFunnelFlow([
       ...funnelFlow.planned,
       {
@@ -1051,7 +1171,13 @@ export default function HomePage() {
   const handleInterphoneResponseSelect = (
     interphoneResponseKind: InterphoneResponseKind,
   ) => {
-    if (!funnelFlow) return;
+    if (!funnelFlow || funnelFlow.modal?.kind !== 'interphone_response') return;
+    if (funnelFlow.modal.prior) {
+      completePriorStageCapture(funnelFlow.modal.prior, {
+        interphoneResponseKind,
+      });
+      return;
+    }
     continueFunnelFlow([
       ...funnelFlow.planned,
       {
@@ -1067,7 +1193,14 @@ export default function HomePage() {
     faceContactKind: FaceContactKind,
     ageGroup: AgeGroup,
   ) => {
-    if (!funnelFlow) return;
+    if (!funnelFlow || funnelFlow.modal?.kind !== 'face_contact') return;
+    if (funnelFlow.modal.prior) {
+      completePriorStageCapture(funnelFlow.modal.prior, {
+        faceContactKind,
+        ageGroup,
+      });
+      return;
+    }
     continueFunnelFlow([
       ...funnelFlow.planned,
       {
@@ -1083,7 +1216,14 @@ export default function HomePage() {
     acquisitionKind: AppointmentAcquisitionKind,
   ) => {
     if (!funnelFlow || funnelFlow.modal?.kind !== 'appointment_source') return;
+    if (funnelFlow.modal.prior) {
+      completePriorStageCapture(funnelFlow.modal.prior, {
+        appointmentAcquisitionKind: acquisitionKind,
+      });
+      return;
+    }
     const { appointmentId, categoryOverride } = funnelFlow.modal;
+    if (!appointmentId) return;
     const formTask: FlowTask = {
       kind: 'appointment_form',
       appointmentId,
@@ -1136,7 +1276,13 @@ export default function HomePage() {
   const handleAppointmentVisitSelect = (
     appointmentVisitKind: AppointmentVisitKind,
   ) => {
-    if (!funnelFlow) return;
+    if (!funnelFlow || funnelFlow.modal?.kind !== 'appointment_visit_kind') return;
+    if (funnelFlow.modal.prior) {
+      completePriorStageCapture(funnelFlow.modal.prior, {
+        appointmentVisitKind,
+      });
+      return;
+    }
     const visitedSessionIds = new Set(
       activities
         .filter(
@@ -1203,6 +1349,20 @@ export default function HomePage() {
   const handleCreateAppointmentForVisit = () => {
     if (!funnelFlow || funnelFlow.modal?.kind !== 'appointment_target') return;
     const visitKind = funnelFlow.modal.visitKind;
+    const hasUnlinkedPriorAppointment =
+      reachedStageIndex(priorReachedThroughOf(funnelFlow)) >=
+        reachedStageIndex('appointment') &&
+      !latestSessionRecord(funnelFlow, 'appointment');
+    if (hasUnlinkedPriorAppointment) {
+      continueFunnelFlow(funnelFlow.planned, [
+        {
+          kind: 'append_appointment_visit',
+          visitKind,
+        },
+        ...funnelFlow.tasks,
+      ]);
+      return;
+    }
     const appointmentId = flowId();
     continueFunnelFlow(funnelFlow.planned, [
       { kind: 'ensure_face_contact' },
@@ -1250,6 +1410,13 @@ export default function HomePage() {
     presentationLocation: PresentationLocation,
   ) => {
     if (!funnelFlow || funnelFlow.modal?.kind !== 'presentation_location') return;
+    if (funnelFlow.modal.prior) {
+      completePriorStageCapture(funnelFlow.modal.prior, {
+        presentationLocation,
+      });
+      return;
+    }
+    if (!funnelFlow.modal.entryKind) return;
     continueFunnelFlow([
       ...funnelFlow.planned,
       {
@@ -1427,16 +1594,16 @@ export default function HomePage() {
         onReset={reset}
       />
 
-      {funnelFlow?.modal?.kind === 'historical_check' && (
+      {funnelFlow?.modal?.kind === 'stage_timing' && (
         <ChoiceModal
-          title="前日以前の活動確認"
+          title="開始時点の確認"
           description={
-            '「' +
+            'この世帯で一番最初に「' +
             HISTORICAL_STAGE_LABELS[funnelFlow.modal.stage] +
-            '」は前日以前に実施済みですか？'
+            '」したのはいつですか？'
           }
-          options={['はい', 'いいえ'] as const}
-          onSelect={handleHistoricalCheckSelect}
+          options={['今日（今回を含む）', '今日より前'] as const}
+          onSelect={handleStageTimingSelect}
           onCancel={cancelFunnelFlow}
         />
       )}
@@ -1451,7 +1618,11 @@ export default function HomePage() {
       {funnelFlow?.modal?.kind === 'interphone_response' && (
         <ChoiceModal
           title="インターホン応答"
-          description="応答回数を選択してください"
+          description={
+            funnelFlow.modal.prior
+              ? '初めて応答した時の回数区分を選択してください'
+              : '応答回数を選択してください'
+          }
           options={INTERPHONE_RESPONSE_KINDS}
           onSelect={handleInterphoneResponseSelect}
           onCancel={cancelFunnelFlow}
@@ -1468,7 +1639,11 @@ export default function HomePage() {
       {funnelFlow?.modal?.kind === 'appointment_source' && (
         <ChoiceModal
           title="アポ取得経路"
-          description="今回のアポ取得経路を選択してください"
+          description={
+            funnelFlow.modal.prior
+              ? '初めてアポを取得した時の経路を選択してください'
+              : '今回のアポ取得経路を選択してください'
+          }
           options={APPOINTMENT_ACQUISITION_KINDS}
           onSelect={handleAppointmentSourceSelect}
           onCancel={cancelFunnelFlow}
@@ -1485,7 +1660,11 @@ export default function HomePage() {
       {funnelFlow?.modal?.kind === 'appointment_visit_kind' && (
         <ChoiceModal
           title="アポ訪問"
-          description="アポ種別を選択してください"
+          description={
+            funnelFlow.modal.prior
+              ? '初めてアポ訪問した時の種別を選択してください'
+              : 'アポ種別を選択してください'
+          }
           options={APPOINTMENT_VISIT_KINDS}
           onSelect={handleAppointmentVisitSelect}
           onCancel={cancelFunnelFlow}
@@ -1498,6 +1677,13 @@ export default function HomePage() {
           appointments={funnelFlow.modal.appointments}
           onSelect={handleAppointmentTargetSelect}
           onCreate={handleCreateAppointmentForVisit}
+          fallbackLabel={
+            reachedStageIndex(priorReachedThroughOf(funnelFlow)) >=
+              reachedStageIndex('appointment') &&
+            !latestSessionRecord(funnelFlow, 'appointment')
+              ? 'リスト外の過去アポとして続ける'
+              : '本日取得したアポを登録して続ける'
+          }
           onCancel={cancelFunnelFlow}
         />
       )}
