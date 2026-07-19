@@ -2,6 +2,7 @@ import type {
   ActivityDef,
   AgeGroup,
   AppointmentVisitKind,
+  FaceContactKind,
   InterphoneResponseKind,
   PresentationLocation,
   ProspectRating,
@@ -9,7 +10,7 @@ import type {
 } from '@/types';
 
 /**
- * 訪問営業の移動・休憩と実施ファネル 18 項目。
+ * 訪問営業の移動・休憩と実施ファネル 17 項目。
  * 上から下へ、順序は保存されるので UI ではこの順で並べる。
  */
 export const ACTIVITIES: ActivityDef[] = [
@@ -21,8 +22,7 @@ export const ACTIVITIES: ActivityDef[] = [
   { type: 'office_arrival', label: 'オフィス到着', color: 'teal', icon: 'Building' },
   { type: 'interphone', label: 'インターホン', color: 'slate', icon: 'DoorClosed' },
   { type: 'interphone_response', label: 'インターホン応答', color: 'zinc', icon: 'PhoneCall' },
-  { type: 'first_contact', label: '新規接触', color: 'sky', icon: 'UserPlus' },
-  { type: 'revisit', label: '再訪接触', color: 'indigo', icon: 'RefreshCcw' },
+  { type: 'face_to_face_contact', label: '対面接触', color: 'sky', icon: 'UserPlus' },
   { type: 'rejection_close', label: '拒否クローズ', color: 'red', icon: 'CircleX' },
   { type: 'appointment', label: 'アポ取得', color: 'amber', icon: 'CalendarCheck' },
   { type: 'appointment_visit', label: 'アポ訪問', color: 'rose', icon: 'MapPinHouse' },
@@ -34,6 +34,8 @@ export const ACTIVITIES: ActivityDef[] = [
 ];
 
 const LEGACY_ACTIVITIES: ActivityDef[] = [
+  { type: 'first_contact', label: '新規接触', color: 'sky', icon: 'UserPlus' },
+  { type: 'revisit', label: '再訪接触', color: 'indigo', icon: 'RefreshCcw' },
   { type: 'break_end', label: '休憩終了', color: 'fuchsia', icon: 'CirclePlay' },
 ];
 
@@ -47,6 +49,11 @@ export const AGE_GROUPS: AgeGroup[] = [
   '70代',
   '80代以上',
   '不明',
+];
+
+export const FACE_CONTACT_KINDS: FaceContactKind[] = [
+  '初回',
+  '2回目以降',
 ];
 
 export const INTERPHONE_RESPONSE_KINDS: InterphoneResponseKind[] = [

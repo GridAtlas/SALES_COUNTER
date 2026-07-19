@@ -1,6 +1,7 @@
 'use client';
 
 import { X } from 'lucide-react';
+import { countFaceContacts } from '@/lib/contact';
 import type { Activity, ActivityType } from '@/types';
 
 interface Props {
@@ -8,21 +9,26 @@ interface Props {
   onClose: () => void;
 }
 
+type AnalysisCountKey =
+  | ActivityType
+  | 'face_contact_total'
+  | 'face_contact_initial';
+
 interface AnalysisMetric {
   label: string;
   description: string;
-  numerator: ActivityType;
-  denominator: ActivityType;
+  numerator: AnalysisCountKey;
+  denominator: AnalysisCountKey;
 }
 
-const FUNNEL_STEPS: { type: ActivityType; shortLabel: string }[] = [
-  { type: 'interphone', shortLabel: 'インターホン' },
-  { type: 'interphone_response', shortLabel: '応答' },
-  { type: 'first_contact', shortLabel: '新規接触' },
-  { type: 'appointment', shortLabel: 'アポ取得' },
-  { type: 'appointment_visit', shortLabel: 'アポ訪問' },
-  { type: 'presentation', shortLabel: 'プレゼン' },
-  { type: 'sale', shortLabel: '成約' },
+const FUNNEL_STEPS: { key: AnalysisCountKey; shortLabel: string }[] = [
+  { key: 'interphone', shortLabel: 'インターホン' },
+  { key: 'interphone_response', shortLabel: '応答' },
+  { key: 'face_contact_total', shortLabel: '対面接触' },
+  { key: 'appointment', shortLabel: 'アポ取得' },
+  { key: 'appointment_visit', shortLabel: 'アポ訪問' },
+  { key: 'presentation', shortLabel: 'プレゼン' },
+  { key: 'sale', shortLabel: '成約' },
 ];
 
 const METRICS: AnalysisMetric[] = [
@@ -33,16 +39,16 @@ const METRICS: AnalysisMetric[] = [
     denominator: 'interphone',
   },
   {
-    label: '新規接触化率',
-    description: '新規接触 ÷ 応答',
-    numerator: 'first_contact',
+    label: '対面接触化率',
+    description: '対面接触 ÷ 応答',
+    numerator: 'face_contact_total',
     denominator: 'interphone_response',
   },
   {
-    label: '新規→アポ取得率',
-    description: 'アポ取得 ÷ 新規接触',
+    label: '初回→アポ取得率',
+    description: 'アポ取得 ÷ 初回対面',
     numerator: 'appointment',
-    denominator: 'first_contact',
+    denominator: 'face_contact_initial',
   },
   {
     label: 'アポ訪問率',
@@ -69,16 +75,21 @@ const METRICS: AnalysisMetric[] = [
     denominator: 'presentation',
   },
   {
-    label: '新規→成約率',
-    description: '成約 ÷ 新規接触',
+    label: '初回→成約率',
+    description: '成約 ÷ 初回対面',
     numerator: 'sale',
-    denominator: 'first_contact',
+    denominator: 'face_contact_initial',
   },
 ];
 
 export function AnalysisModal({ activities, onClose }: Props) {
-  const countOf = (type: ActivityType) =>
-    activities.filter((activity) => activity.type === type).length;
+  const countOf = (key: AnalysisCountKey) => {
+    if (key === 'face_contact_total') return countFaceContacts(activities);
+    if (key === 'face_contact_initial') {
+      return countFaceContacts(activities, '初回');
+    }
+    return activities.filter((activity) => activity.type === key).length;
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-3">
@@ -113,14 +124,14 @@ export function AnalysisModal({ activities, onClose }: Props) {
             <div className="grid grid-cols-4 gap-1.5">
               {FUNNEL_STEPS.map((step) => (
                 <div
-                  key={step.type}
+                  key={step.key}
                   className="min-w-0 rounded-lg bg-slate-700 px-0.5 py-2 text-center text-white"
                 >
                   <p className="truncate text-[9px] font-semibold opacity-80">
                     {step.shortLabel}
                   </p>
                   <p className="num mt-1 text-lg font-bold leading-none">
-                    {countOf(step.type)}
+                    {countOf(step.key)}
                   </p>
                 </div>
               ))}

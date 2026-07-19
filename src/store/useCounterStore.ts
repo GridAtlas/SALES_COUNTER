@@ -22,6 +22,25 @@ interface CounterState {
 const uid = () =>
   `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
+const migrateContactActivities = (activities: Activity[]) =>
+  activities.map((activity): Activity => {
+    if (activity.type === 'first_contact') {
+      return {
+        ...activity,
+        type: 'face_to_face_contact',
+        faceContactKind: '初回',
+      };
+    }
+    if (activity.type === 'revisit') {
+      return {
+        ...activity,
+        type: 'face_to_face_contact',
+        faceContactKind: '2回目以降',
+      };
+    }
+    return activity;
+  });
+
 export const useCounterStore = create<CounterState>()(
   persist(
     (set, get) => ({
@@ -46,20 +65,27 @@ export const useCounterStore = create<CounterState>()(
         })),
 
       undoLast: () =>
-        set((s) => ({
-          activities: s.activities.slice(0, -1),
+        set((state) => ({
+          activities: state.activities.slice(0, -1),
         })),
 
       reset: () => set({ activities: [] }),
 
       countOf: (type) =>
-        get().activities.filter((a) => a.type === type).length,
+        get().activities.filter((activity) => activity.type === type).length,
 
       totalCount: () => get().activities.length,
     }),
     {
       name: 'sales-counter-store',
-      version: 1,
+      version: 2,
+      migrate: (persistedState) => {
+        const state = persistedState as Partial<CounterState>;
+        return {
+          ...state,
+          activities: migrateContactActivities(state.activities ?? []),
+        } as CounterState;
+      },
     },
   ),
 );

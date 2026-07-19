@@ -3,6 +3,11 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { BarChart3, Clock3, X } from 'lucide-react';
 import { ACTIVITIES, getActivityDef } from '@/lib/constants';
+import {
+  countFaceContacts,
+  faceContactKindOf,
+  isFaceContactActivity,
+} from '@/lib/contact';
 import type { Activity, ActivityDef, DailyReport } from '@/types';
 
 interface Props {
@@ -38,6 +43,7 @@ const activityDetails = (activity: Activity): string[] => {
   return [
     activity.customerStatus,
     activity.interphoneResponseKind,
+    faceContactKindOf(activity),
     activity.ageGroup,
     activity.appointmentVisitKind,
     activity.presentationLocation,
@@ -60,7 +66,9 @@ export function DailyReportDetailModal({ report, onClose }: Props) {
     [report.activities],
   );
   const countOf = (def: ActivityDef) =>
-    report.activities.filter((activity) => activity.type === def.type).length;
+    def.type === 'face_to_face_contact'
+      ? countFaceContacts(report.activities)
+      : report.activities.filter((activity) => activity.type === def.type).length;
   const sectionTotal = (defs: ActivityDef[]) =>
     defs.reduce((sum, def) => sum + countOf(def), 0);
 
@@ -128,7 +136,9 @@ export function DailyReportDetailModal({ report, onClose }: Props) {
                     </span>
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-semibold text-slate-700">
-                        {getActivityDef(activity.type)?.label ?? activity.type}
+                        {isFaceContactActivity(activity)
+                          ? '対面接触'
+                          : getActivityDef(activity.type)?.label ?? activity.type}
                       </p>
                       {details.length > 0 && (
                         <p className="mt-0.5 text-[11px] leading-snug text-slate-500">

@@ -9,8 +9,9 @@ export type ActivityType =
   | 'office_arrival' // オフィス到着
   | 'interphone' // インターホン
   | 'interphone_response' // インターホン応答
-  | 'first_contact' // 新規接触
-  | 'revisit' // 再訪接触
+  | 'face_to_face_contact' // 対面接触
+  | 'first_contact' // 新規接触（旧データ互換）
+  | 'revisit' // 再訪接触（旧データ互換）
   | 'rejection_close' // 拒否クローズ
   | 'appointment' // アポ取得
   | 'appointment_visit' // アポ訪問
@@ -33,6 +34,8 @@ export type AgeGroup =
   | '不明';
 
 export type CustomerStatus = '新規' | '既加入' | '過去解約';
+
+export type FaceContactKind = '初回' | '2回目以降';
 
 export type InterphoneResponseKind = '初回応答' | '2回目以降';
 
@@ -74,6 +77,7 @@ export interface AppointmentDetails {
 
 export interface ActivityDetails {
   ageGroup?: AgeGroup;
+  faceContactKind?: FaceContactKind;
   customerStatus?: CustomerStatus;
   interphoneResponseKind?: InterphoneResponseKind;
   appointmentVisitKind?: AppointmentVisitKind;

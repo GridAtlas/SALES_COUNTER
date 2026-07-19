@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { ArrowLeft, Check, Copy } from 'lucide-react';
 import { useCounterStore } from '@/store/useCounterStore';
 import { getActivityDef } from '@/lib/constants';
+import { faceContactKindOf, isFaceContactActivity } from '@/lib/contact';
 import type { Activity } from '@/types';
 
 const activityDetailLabels = (activity: Activity): string[] => {
@@ -33,6 +34,7 @@ const activityDetailLabels = (activity: Activity): string[] => {
   return [
     activity.customerStatus,
     activity.interphoneResponseKind,
+    faceContactKindOf(activity),
     activity.ageGroup,
     activity.appointmentVisitKind,
     activity.presentationLocation,
@@ -90,10 +92,13 @@ export default function HistoryPage() {
         .map(({ date, list }) => {
           const lines = list.map((activity) => {
             const def = getActivityDef(activity.type);
+            const label = isFaceContactActivity(activity)
+              ? '対面接触'
+              : def?.label ?? activity.type;
             const details = activityDetailLabels(activity);
             const detailText =
               details.length > 0 ? `（${details.join(' / ')}）` : '';
-            return `${timeStr(activity.timestamp)} ${def?.label ?? activity.type}${detailText}`;
+            return `${timeStr(activity.timestamp)} ${label}${detailText}`;
           });
           return [date, ...lines].join('\n');
         })
@@ -163,7 +168,9 @@ export default function HistoryPage() {
                         aria-hidden
                       />
                       <span className="flex-1 text-sm text-stone-700">
-                        {def?.label ?? a.type}
+                        {isFaceContactActivity(a)
+                          ? '対面接触'
+                          : def?.label ?? a.type}
                         {activityDetailLabels(a).length > 0 && (
                           <span className="ml-1 font-semibold text-stone-500">
                             （{activityDetailLabels(a).join(' / ')}）

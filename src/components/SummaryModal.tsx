@@ -2,6 +2,7 @@
 
 import { X } from 'lucide-react';
 import { ACTIVITIES } from '@/lib/constants';
+import { countFaceContacts } from '@/lib/contact';
 import type { Activity, ActivityDef } from '@/types';
 
 interface Props {
@@ -14,7 +15,9 @@ const salesActivities = ACTIVITIES.slice(6);
 
 export function SummaryModal({ activities, onClose }: Props) {
   const countOf = (def: ActivityDef) =>
-    activities.filter((activity) => activity.type === def.type).length;
+    def.type === 'face_to_face_contact'
+      ? countFaceContacts(activities)
+      : activities.filter((activity) => activity.type === def.type).length;
   const sectionTotal = (defs: ActivityDef[]) =>
     defs.reduce((sum, def) => sum + countOf(def), 0);
 

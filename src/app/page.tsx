@@ -6,7 +6,7 @@ import { AnalysisButton } from '@/components/AnalysisButton';
 import { AnalysisModal } from '@/components/AnalysisModal';
 import { ActivityEndButton } from '@/components/ActivityEndButton';
 import { ActivityEndModal } from '@/components/ActivityEndModal';
-import { AgeGroupModal } from '@/components/AgeGroupModal';
+import { FaceContactModal } from '@/components/FaceContactModal';
 import { AppointmentList } from '@/components/AppointmentList';
 import { AppointmentModal } from '@/components/AppointmentModal';
 import { ChoiceModal } from '@/components/ChoiceModal';
@@ -38,6 +38,7 @@ import type {
   AppointmentDetails,
   AppointmentVisitKind,
   CustomerStatus,
+  FaceContactKind,
   GpsDetails,
   InterphoneResponseKind,
   PresentationLocation,
@@ -63,8 +64,7 @@ export default function HomePage() {
   // 静的なゼロ値でレンダリング → mount 後に本物の store を反映。
   const [hydrated, setHydrated] = useState(false);
   const [activeView, setActiveView] = useState<HomeView>('counter');
-  const [pendingContactType, setPendingContactType] =
-    useState<ActivityType | null>(null);
+  const [showFaceContact, setShowFaceContact] = useState(false);
   const [showInterphoneStatus, setShowInterphoneStatus] = useState(false);
   const [showInterphoneResponse, setShowInterphoneResponse] = useState(false);
   const [showAppointment, setShowAppointment] = useState(false);
@@ -168,9 +168,9 @@ export default function HomePage() {
       setShowInterphoneResponse(true);
       return;
     }
-    if (type === 'first_contact' || type === 'revisit') {
+    if (type === 'face_to_face_contact') {
       pendingGpsRef.current = gpsPromise;
-      setPendingContactType(type);
+      setShowFaceContact(true);
       return;
     }
     if (type === 'appointment') {
@@ -205,10 +205,12 @@ export default function HomePage() {
     recordActivity(type, {}, gpsPromise);
   };
 
-  const handleAgeSelect = (ageGroup: AgeGroup) => {
-    if (!pendingContactType) return;
-    recordPendingActivity(pendingContactType, { ageGroup });
-    setPendingContactType(null);
+  const handleFaceContactSave = (
+    faceContactKind: FaceContactKind,
+    ageGroup: AgeGroup,
+  ) => {
+    recordPendingActivity('face_to_face_contact', { faceContactKind, ageGroup });
+    setShowFaceContact(false);
   };
 
   const handleCustomerStatusSelect = (customerStatus: CustomerStatus) => {
@@ -341,13 +343,12 @@ export default function HomePage() {
         onReset={reset}
       />
 
-      {pendingContactType && (
-        <AgeGroupModal
-          contactLabel={getActivityDef(pendingContactType)?.label ?? ''}
-          onSelect={handleAgeSelect}
+      {showFaceContact && (
+        <FaceContactModal
+          onSave={handleFaceContactSave}
           onCancel={() => {
             cancelPendingGps();
-            setPendingContactType(null);
+            setShowFaceContact(false);
           }}
         />
       )}
