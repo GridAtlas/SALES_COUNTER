@@ -19,7 +19,7 @@ export function CustomerStatusModal({ onSelect, onCancel }: Props) {
         className="w-full max-w-sm rounded-2xl bg-white p-4 shadow-xl"
       >
         <h2 id="customer-status-title" className="text-center text-lg font-bold text-stone-800">
-          インターホン種別
+          インターホン押下
         </h2>
         <p className="mt-1 text-center text-xs text-stone-500">
           お客様の状況を選択してください

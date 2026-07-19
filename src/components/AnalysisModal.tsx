@@ -22,7 +22,7 @@ interface AnalysisMetric {
 }
 
 const FUNNEL_STEPS: { key: AnalysisCountKey; shortLabel: string }[] = [
-  { key: 'interphone', shortLabel: 'インターホン' },
+  { key: 'interphone', shortLabel: '押下' },
   { key: 'interphone_response', shortLabel: '応答' },
   { key: 'face_contact_total', shortLabel: '対面接触' },
   { key: 'appointment', shortLabel: 'アポ取得' },

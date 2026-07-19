@@ -10,7 +10,12 @@ import type { Activity, ActivityDetails, ActivityType } from '@/types';
 interface CounterState {
   activities: Activity[];
 
-  add: (type: ActivityType, details?: ActivityDetails) => string;
+  add: (
+    type: ActivityType,
+    details?: ActivityDetails,
+    timestamp?: number,
+    id?: string,
+  ) => string;
   updateActivity: (id: string, details: ActivityDetails) => void;
   undoLast: () => void; // 一番最後のレコードを削除（種別問わず）
   reset: () => void;
@@ -46,12 +51,12 @@ export const useCounterStore = create<CounterState>()(
     (set, get) => ({
       activities: [],
 
-      add: (type, details = {}) => {
-        const id = uid();
+      add: (type, details = {}, timestamp = Date.now(), requestedId) => {
+        const id = requestedId ?? uid();
         set((state) => ({
           activities: [
             ...state.activities,
-            { id, type, timestamp: Date.now(), ...details },
+            { id, type, timestamp, ...details },
           ],
         }));
         return id;

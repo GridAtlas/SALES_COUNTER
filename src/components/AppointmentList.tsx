@@ -52,6 +52,14 @@ export function AppointmentList({ appointments, hydrated }: Props) {
           appointment.appointmentDate &&
           appointment.appointmentStartTime &&
           appointment.appointmentEndTime;
+        const recordedDate = new Date(appointment.timestamp).toLocaleDateString(
+          'sv-SE',
+        );
+        const category =
+          appointment.appointmentCategory ??
+          (appointment.appointmentDate === recordedDate
+            ? '当日取得アポ'
+            : '予定アポ');
 
         return (
           <article
@@ -81,6 +89,12 @@ export function AppointmentList({ appointments, hydrated }: Props) {
                       日時未設定のアポ
                     </h2>
                   )}
+                  <p className="mt-1 text-[10px] font-semibold text-stone-400">
+                    {category}
+                    {appointment.appointmentAcquisitionKind
+                      ? ` ・ ${appointment.appointmentAcquisitionKind}`
+                      : ''}
+                  </p>
                 </div>
               </div>
 

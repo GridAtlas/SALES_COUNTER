@@ -36,7 +36,12 @@ const activityDetailLabels = (activity: Activity): string[] => {
     activity.interphoneResponseKind,
     faceContactKindOf(activity),
     activity.ageGroup,
+    activity.appointmentAcquisitionKind,
+    activity.appointmentCategory,
     activity.appointmentVisitKind,
+    activity.linkedAppointmentLabel
+      ? `対象：${activity.linkedAppointmentLabel}`
+      : undefined,
     activity.presentationEntryKind,
     activity.presentationLocation,
     rejectionReason,

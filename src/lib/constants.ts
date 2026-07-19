@@ -1,6 +1,7 @@
 import type {
   ActivityDef,
   AgeGroup,
+  AppointmentAcquisitionKind,
   AppointmentVisitKind,
   FaceContactKind,
   InterphoneResponseKind,
@@ -21,7 +22,7 @@ export const ACTIVITIES: ActivityDef[] = [
   { type: 'travel_start', label: '移動開始', color: 'blue', icon: 'Navigation' },
   { type: 'site_departure', label: '現場出発', color: 'indigo', icon: 'LogOut' },
   { type: 'office_arrival', label: 'オフィス到着', color: 'teal', icon: 'Building' },
-  { type: 'interphone', label: 'インターホン', color: 'slate', icon: 'DoorClosed' },
+  { type: 'interphone', label: 'インターホン押下', color: 'slate', icon: 'DoorClosed' },
   { type: 'interphone_response', label: 'インターホン応答', color: 'zinc', icon: 'PhoneCall' },
   { type: 'face_to_face_contact', label: '対面接触', color: 'sky', icon: 'UserPlus' },
   { type: 'rejection_close', label: '拒否クローズ', color: 'red', icon: 'CircleX' },
@@ -65,6 +66,11 @@ export const INTERPHONE_RESPONSE_KINDS: InterphoneResponseKind[] = [
 export const APPOINTMENT_VISIT_KINDS: AppointmentVisitKind[] = [
   '予定アポ',
   '当日取得アポ',
+];
+
+export const APPOINTMENT_ACQUISITION_KINDS: AppointmentAcquisitionKind[] = [
+  '対面取得',
+  'その他取得',
 ];
 
 export const PRESENTATION_ENTRY_KINDS: PresentationEntryKind[] = [

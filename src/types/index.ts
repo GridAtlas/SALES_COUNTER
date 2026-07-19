@@ -41,6 +41,8 @@ export type InterphoneResponseKind = '初回応答' | '2回目以降';
 
 export type AppointmentVisitKind = '予定アポ' | '当日取得アポ';
 
+export type AppointmentAcquisitionKind = '対面取得' | 'その他取得';
+
 export type PresentationEntryKind = '即プレゼン' | 'アポ訪問';
 
 export type ProspectRating = 1 | 2 | 3 | 4 | 5;
@@ -84,7 +86,11 @@ export interface ActivityDetails {
   faceContactKind?: FaceContactKind;
   customerStatus?: CustomerStatus;
   interphoneResponseKind?: InterphoneResponseKind;
+  appointmentAcquisitionKind?: AppointmentAcquisitionKind;
+  appointmentCategory?: AppointmentVisitKind;
   appointmentVisitKind?: AppointmentVisitKind;
+  linkedAppointmentId?: string;
+  linkedAppointmentLabel?: string;
   presentationEntryKind?: PresentationEntryKind;
   presentationLocation?: PresentationLocation;
   rejectionReason?: RejectionReason;
