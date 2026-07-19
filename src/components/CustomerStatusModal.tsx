@@ -5,11 +5,16 @@ import type { CustomerStatus } from '@/types';
 const CUSTOMER_STATUSES: CustomerStatus[] = ['新規', '既加入', '過去解約'];
 
 interface Props {
+  title?: string;
   onSelect: (customerStatus: CustomerStatus) => void;
   onCancel: () => void;
 }
 
-export function CustomerStatusModal({ onSelect, onCancel }: Props) {
+export function CustomerStatusModal({
+  title = 'インターホン押下',
+  onSelect,
+  onCancel,
+}: Props) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4">
       <div
@@ -19,7 +24,7 @@ export function CustomerStatusModal({ onSelect, onCancel }: Props) {
         className="w-full max-w-sm rounded-2xl bg-white p-4 shadow-xl"
       >
         <h2 id="customer-status-title" className="text-center text-lg font-bold text-stone-800">
-          インターホン押下
+          {title}
         </h2>
         <p className="mt-1 text-center text-xs text-stone-500">
           お客様の状況を選択してください

@@ -24,7 +24,6 @@ import { Header } from '@/components/Header';
 import {
   ACTIVITIES,
   APPOINTMENT_ACQUISITION_KINDS,
-  APPOINTMENT_VISIT_KINDS,
   getActivityDef,
   PRESENTATION_ENTRY_KINDS,
   SALE_ENTRY_KINDS,
@@ -152,7 +151,7 @@ type FlowTask =
   | { kind: 'appointment_visit'; historyChecked?: boolean }
   | {
       kind: 'append_appointment_visit';
-      visitKind: AppointmentVisitKind;
+      visitKind?: AppointmentVisitKind;
       appointmentId?: string;
       appointmentLabel?: string;
     }
@@ -188,10 +187,8 @@ type FlowModal =
       acquisitionKind: AppointmentAcquisitionKind;
       categoryOverride?: AppointmentVisitKind;
     }
-  | { kind: 'appointment_visit_kind'; prior?: PriorDetailContext }
   | {
       kind: 'appointment_target';
-      visitKind: AppointmentVisitKind;
       appointments: Activity[];
     }
   | { kind: 'presentation_entry' }
@@ -479,6 +476,33 @@ export default function HomePage() {
   const latestSessionActivity = (flow: FunnelFlow) =>
     flow.planned[flow.planned.length - 1] ??
     sessionActivitiesOf(flow)[sessionActivitiesOf(flow).length - 1];
+
+  const visitableAppointmentsOf = (flow: FunnelFlow): Activity[] => {
+    const visitedSessionIds = new Set(
+      activities
+        .filter(
+          (activity) =>
+            activity.type === 'appointment_visit' && activity.sessionId,
+        )
+        .map((activity) => activity.sessionId!),
+    );
+    const plannedAppointments: Activity[] = flow.planned
+      .filter((planned) => planned.type === 'appointment')
+      .map((planned) => ({
+        id: planned.id,
+        type: planned.type,
+        timestamp: planned.timestamp ?? flow.anchorTimestamp,
+        ...planned.details,
+        sessionId: flow.sessionId,
+        operationId: flow.operationId,
+        recordSource: planned.recordSource,
+      }));
+    return [...plannedAppointments, ...appointments].filter(
+      (appointment) =>
+        !appointment.sessionId ||
+        !visitedSessionIds.has(appointment.sessionId),
+    );
+  };
 
   const canAskHistorical = (
     flow: FunnelFlow,
@@ -785,7 +809,10 @@ export default function HomePage() {
 
       if (task.kind === 'appointment_visit') {
         if (sessionHasType(next, 'appointment_visit')) continue;
-        next.modal = { kind: 'appointment_visit_kind' };
+        next.modal = {
+          kind: 'appointment_target',
+          appointments: visitableAppointmentsOf(next),
+        };
         setFunnelFlow(next);
         return;
       }
@@ -1092,7 +1119,10 @@ export default function HomePage() {
     }
 
     const prior: PriorDetailContext = { stage, timing };
-    if (stage === 'interphone_response') {
+    if (
+      stage === 'interphone_response' ||
+      stage === 'appointment_visit'
+    ) {
       completePriorStageCapture(prior, {});
       return;
     }
@@ -1103,9 +1133,7 @@ export default function HomePage() {
           ? { kind: 'face_contact', prior }
           : stage === 'appointment'
             ? { kind: 'appointment_source', prior }
-            : stage === 'appointment_visit'
-              ? { kind: 'appointment_visit_kind', prior }
-              : { kind: 'presentation_location', prior };
+            : { kind: 'presentation_location', prior };
     setFunnelFlow({ ...funnelFlow, modal });
   };
 
@@ -1211,7 +1239,11 @@ export default function HomePage() {
       tasks[0]?.kind === 'append_appointment_visit' &&
       tasks[0].appointmentId === appointmentId
     ) {
-      tasks[0] = { ...tasks[0], appointmentLabel };
+      tasks[0] = {
+        ...tasks[0],
+        appointmentLabel,
+        visitKind: appointmentCategory,
+      };
     }
 
     continueFunnelFlow(
@@ -1232,57 +1264,9 @@ export default function HomePage() {
     );
   };
 
-  const handleAppointmentVisitSelect = (
-    appointmentVisitKind: AppointmentVisitKind,
-  ) => {
-    if (!funnelFlow || funnelFlow.modal?.kind !== 'appointment_visit_kind') return;
-    if (funnelFlow.modal.prior) {
-      completePriorStageCapture(funnelFlow.modal.prior, {
-        appointmentVisitKind,
-      });
-      return;
-    }
-    const visitedSessionIds = new Set(
-      activities
-        .filter(
-          (activity) =>
-            activity.type === 'appointment_visit' && activity.sessionId,
-        )
-        .map((activity) => activity.sessionId!),
-    );
-    const plannedAppointments: Activity[] = funnelFlow.planned
-      .filter((planned) => planned.type === 'appointment')
-      .map((planned) => ({
-        id: planned.id,
-        type: planned.type,
-        timestamp: planned.timestamp ?? funnelFlow.anchorTimestamp,
-        ...planned.details,
-        sessionId: funnelFlow.sessionId,
-        operationId: funnelFlow.operationId,
-        recordSource: planned.recordSource,
-      }));
-    const matchingAppointments = [
-      ...appointments,
-      ...plannedAppointments,
-    ].filter(
-      (appointment) =>
-        appointmentCategoryOf(appointment) === appointmentVisitKind &&
-        (!appointment.sessionId ||
-          !visitedSessionIds.has(appointment.sessionId)),
-    );
-    setFunnelFlow({
-      ...funnelFlow,
-      modal: {
-        kind: 'appointment_target',
-        visitKind: appointmentVisitKind,
-        appointments: matchingAppointments,
-      },
-    });
-  };
-
   const handleAppointmentTargetSelect = (appointment: Activity) => {
     if (!funnelFlow || funnelFlow.modal?.kind !== 'appointment_target') return;
-    const visitKind = funnelFlow.modal.visitKind;
+    const visitKind = appointmentCategoryOf(appointment);
     const targetSessionId = appointment.sessionId ?? funnelFlow.sessionId;
     const isPlannedAppointment = funnelFlow.planned.some(
       (planned) => planned.id === appointment.id,
@@ -1306,7 +1290,6 @@ export default function HomePage() {
 
   const handleCreateAppointmentForVisit = () => {
     if (!funnelFlow || funnelFlow.modal?.kind !== 'appointment_target') return;
-    const visitKind = funnelFlow.modal.visitKind;
     const hasUnlinkedPriorAppointment =
       reachedStageIndex(priorReachedThroughOf(funnelFlow)) >=
         reachedStageIndex('appointment') &&
@@ -1315,7 +1298,6 @@ export default function HomePage() {
       continueFunnelFlow(funnelFlow.planned, [
         {
           kind: 'append_appointment_visit',
-          visitKind,
         },
         ...funnelFlow.tasks,
       ]);
@@ -1327,11 +1309,9 @@ export default function HomePage() {
       {
         kind: 'appointment',
         appointmentId,
-        categoryOverride: visitKind,
       },
       {
         kind: 'append_appointment_visit',
-        visitKind,
         appointmentId,
       },
       ...funnelFlow.tasks,
@@ -1568,6 +1548,7 @@ export default function HomePage() {
 
       {funnelFlow?.modal?.kind === 'customer_status' && (
         <CustomerStatusModal
+          title={funnelFlow.modal.prior ? '顧客属性' : undefined}
           onSelect={handleCustomerStatusSelect}
           onCancel={cancelFunnelFlow}
         />
@@ -1601,23 +1582,8 @@ export default function HomePage() {
         />
       )}
 
-      {funnelFlow?.modal?.kind === 'appointment_visit_kind' && (
-        <ChoiceModal
-          title="アポ訪問"
-          description={
-            funnelFlow.modal.prior
-              ? '初めてアポ訪問した時の種別を選択してください'
-              : 'アポ種別を選択してください'
-          }
-          options={APPOINTMENT_VISIT_KINDS}
-          onSelect={handleAppointmentVisitSelect}
-          onCancel={cancelFunnelFlow}
-        />
-      )}
-
       {funnelFlow?.modal?.kind === 'appointment_target' && (
         <AppointmentTargetModal
-          visitKind={funnelFlow.modal.visitKind}
           appointments={funnelFlow.modal.appointments}
           onSelect={handleAppointmentTargetSelect}
           onCreate={handleCreateAppointmentForVisit}
@@ -1626,7 +1592,7 @@ export default function HomePage() {
               reachedStageIndex('appointment') &&
             !latestSessionRecord(funnelFlow, 'appointment')
               ? 'リスト外の過去アポとして続ける'
-              : '本日取得したアポを登録して続ける'
+              : '対象アポを登録して続ける'
           }
           onCancel={cancelFunnelFlow}
         />

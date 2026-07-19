@@ -1,10 +1,9 @@
 'use client';
 
 import { CalendarClock, MapPinHouse } from 'lucide-react';
-import type { Activity, AppointmentVisitKind } from '@/types';
+import type { Activity } from '@/types';
 
 interface Props {
-  visitKind: AppointmentVisitKind;
   appointments: Activity[];
   onSelect: (appointment: Activity) => void;
   onCreate: () => void;
@@ -23,7 +22,6 @@ const dateLabel = (date?: string) => {
 };
 
 export function AppointmentTargetModal({
-  visitKind,
   appointments,
   onSelect,
   onCreate,
@@ -43,7 +41,7 @@ export function AppointmentTargetModal({
             対象アポを選択
           </h2>
           <p className="mt-0.5 text-xs text-stone-500">
-            {visitKind}に該当するアポだけを表示しています
+            登録済みのアポから訪問先を選択してください
           </p>
         </header>
 
