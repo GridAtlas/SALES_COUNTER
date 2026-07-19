@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityButton } from '@/components/ActivityButton';
+import { AnalysisButton } from '@/components/AnalysisButton';
+import { AnalysisModal } from '@/components/AnalysisModal';
 import { ActivityEndButton } from '@/components/ActivityEndButton';
 import { ActivityEndModal } from '@/components/ActivityEndModal';
 import { AgeGroupModal } from '@/components/AgeGroupModal';
@@ -70,6 +72,7 @@ export default function HomePage() {
   const [showPresentationLocation, setShowPresentationLocation] = useState(false);
   const [showProspect, setShowProspect] = useState(false);
   const [showSummary, setShowSummary] = useState(false);
+  const [showAnalysis, setShowAnalysis] = useState(false);
   const [showActivityEnd, setShowActivityEnd] = useState(false);
   const [pendingRejectionType, setPendingRejectionType] =
     useState<ActivityType | null>(null);
@@ -316,6 +319,7 @@ export default function HomePage() {
                 totalCount={total}
                 onTap={() => setShowSummary(true)}
               />
+              <AnalysisButton onTap={() => setShowAnalysis(true)} />
               <ActivityEndButton
                 disabled={todaysActivities.length === 0}
                 onTap={() => setShowActivityEnd(true)}
@@ -418,6 +422,13 @@ export default function HomePage() {
         <SummaryModal
           activities={activities}
           onClose={() => setShowSummary(false)}
+        />
+      )}
+
+      {showAnalysis && (
+        <AnalysisModal
+          activities={activities}
+          onClose={() => setShowAnalysis(false)}
         />
       )}
 
