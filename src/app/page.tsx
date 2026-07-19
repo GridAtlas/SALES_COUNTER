@@ -13,6 +13,7 @@ import { AppointmentTargetModal } from '@/components/AppointmentTargetModal';
 import { ChoiceModal } from '@/components/ChoiceModal';
 import { CustomerStatusModal } from '@/components/CustomerStatusModal';
 import { DailyReportList } from '@/components/DailyReportList';
+import { DailyReportButton } from '@/components/DailyReportButton';
 import { PresentationLocationModal } from '@/components/PresentationLocationModal';
 import { ProspectList } from '@/components/ProspectList';
 import { ProspectModal } from '@/components/ProspectModal';
@@ -281,6 +282,7 @@ export default function HomePage() {
   const activeSessionId = useCounterStore((state) => state.activeSessionId);
   const add = useCounterStore((state) => state.add);
   const updateActivity = useCounterStore((state) => state.updateActivity);
+  const removeActivity = useCounterStore((state) => state.removeActivity);
   const setActiveSessionId = useCounterStore(
     (state) => state.setActiveSessionId,
   );
@@ -1466,7 +1468,6 @@ export default function HomePage() {
         onChange={setActiveView}
         appointmentCount={appointments.length}
         prospectCount={prospects.length}
-        reportCount={hydrated ? dailyReports.length : 0}
       />
 
       {activeView === 'counter' ? (
@@ -1503,6 +1504,10 @@ export default function HomePage() {
             <h2 className="counter-section-title">🔲 分析・報告</h2>
             <div className="counter-button-grid counter-button-grid--report">
               <AnalysisButton onTap={() => setShowAnalysis(true)} />
+              <DailyReportButton
+                reportCount={hydrated ? dailyReports.length : 0}
+                onTap={() => setActiveView('reports')}
+              />
               <ActivityEndButton
                 disabled={todaysActivities.length === 0}
                 onTap={() => setShowActivityEnd(true)}
@@ -1511,7 +1516,12 @@ export default function HomePage() {
           </section>
         </div>
       ) : activeView === 'appointments' ? (
-        <AppointmentList appointments={appointments} hydrated={hydrated} />
+        <AppointmentList
+          appointments={appointments}
+          hydrated={hydrated}
+          onReschedule={(id, details) => updateActivity(id, details)}
+          onCancelAppointment={removeActivity}
+        />
       ) : activeView === 'prospects' ? (
         <ProspectList prospects={prospects} hydrated={hydrated} />
       ) : (

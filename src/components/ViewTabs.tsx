@@ -1,6 +1,6 @@
 'use client';
 
-import { CalendarDays, FileText, LayoutGrid, Star } from 'lucide-react';
+import { CalendarDays, LayoutGrid, Star } from 'lucide-react';
 
 export type HomeView = 'counter' | 'appointments' | 'prospects' | 'reports';
 
@@ -9,7 +9,6 @@ interface Props {
   onChange: (view: HomeView) => void;
   appointmentCount: number;
   prospectCount: number;
-  reportCount: number;
 }
 
 export function ViewTabs({
@@ -17,7 +16,6 @@ export function ViewTabs({
   onChange,
   appointmentCount,
   prospectCount,
-  reportCount,
 }: Props) {
   const tabClass = (view: HomeView, activeColor = 'text-stone-700') => [
     'tap-target flex min-w-0 items-center justify-center gap-0.5 rounded-lg px-0.5 text-[9px] font-bold',
@@ -34,7 +32,7 @@ export function ViewTabs({
 
   return (
     <div
-      className="app-tabs mx-2 mb-1 grid grid-cols-4 rounded-xl bg-stone-200/80 p-1"
+      className="app-tabs mx-2 mb-1 grid grid-cols-3 rounded-xl bg-stone-200/80 p-1"
       role="tablist"
       aria-label="画面切り替え"
     >
@@ -69,17 +67,6 @@ export function ViewTabs({
         <Star size={14} />
         保留／見込
         {badge(prospectCount)}
-      </button>
-      <button
-        type="button"
-        role="tab"
-        aria-selected={activeView === 'reports'}
-        onClick={() => onChange('reports')}
-        className={tabClass('reports', 'text-slate-700')}
-      >
-        <FileText size={14} />
-        日報
-        {badge(reportCount)}
       </button>
     </div>
   );

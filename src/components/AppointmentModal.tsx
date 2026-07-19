@@ -6,6 +6,10 @@ import type { AppointmentDetails } from '@/types';
 interface Props {
   onSave: (details: AppointmentDetails) => void;
   onCancel: () => void;
+  initialDetails?: Partial<AppointmentDetails>;
+  title?: string;
+  description?: string;
+  submitLabel?: string;
 }
 
 const todayValue = () => {
@@ -16,11 +20,26 @@ const todayValue = () => {
   return `${year}-${month}-${day}`;
 };
 
-export function AppointmentModal({ onSave, onCancel }: Props) {
-  const [appointmentDate, setAppointmentDate] = useState(todayValue);
-  const [appointmentStartTime, setAppointmentStartTime] = useState('');
-  const [appointmentEndTime, setAppointmentEndTime] = useState('');
-  const [appointmentMemo, setAppointmentMemo] = useState('');
+export function AppointmentModal({
+  onSave,
+  onCancel,
+  initialDetails,
+  title = 'アポ日時',
+  description = '日付と時間帯を入力すると記録されます',
+  submitLabel = 'アポを記録',
+}: Props) {
+  const [appointmentDate, setAppointmentDate] = useState(
+    initialDetails?.appointmentDate ?? todayValue,
+  );
+  const [appointmentStartTime, setAppointmentStartTime] = useState(
+    initialDetails?.appointmentStartTime ?? '',
+  );
+  const [appointmentEndTime, setAppointmentEndTime] = useState(
+    initialDetails?.appointmentEndTime ?? '',
+  );
+  const [appointmentMemo, setAppointmentMemo] = useState(
+    initialDetails?.appointmentMemo ?? '',
+  );
 
   const invalidTimeRange =
     Boolean(appointmentStartTime && appointmentEndTime) &&
@@ -54,10 +73,10 @@ export function AppointmentModal({ onSave, onCancel }: Props) {
           id="appointment-title"
           className="text-center text-lg font-bold text-stone-800"
         >
-          アポ日時
+          {title}
         </h2>
         <p className="mt-1 text-center text-xs text-stone-500">
-          日付と時間帯を入力すると記録されます
+          {description}
         </p>
 
         <label className="mt-2 block min-w-0 text-xs font-semibold text-stone-600">
@@ -125,7 +144,7 @@ export function AppointmentModal({ onSave, onCancel }: Props) {
           disabled={!canSave}
           className="tap-target mt-3 w-full rounded-xl bg-amber-500 px-3 py-2 text-sm font-bold text-white active:bg-amber-600 disabled:opacity-40"
         >
-          アポを記録
+          {submitLabel}
         </button>
         <button
           type="button"

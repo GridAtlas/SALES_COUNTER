@@ -15,6 +15,7 @@ interface CounterState {
     id?: string,
   ) => string;
   updateActivity: (id: string, details: ActivityDetails) => void;
+  removeActivity: (id: string) => void;
   setActiveSessionId: (sessionId?: string) => void;
   undoLast: () => void;
   reset: () => void;
@@ -193,6 +194,32 @@ export const useCounterStore = create<CounterState>()(
             activity.id === id ? { ...activity, ...details } : activity,
           ),
         })),
+
+      removeActivity: (id) =>
+        set((state) => {
+          const removed = state.activities.find(
+            (activity) => activity.id === id,
+          );
+          if (!removed) return state;
+          const activities = state.activities.filter(
+            (activity) => activity.id !== id,
+          );
+          const activeSessionId =
+            state.activeSessionId &&
+            activities.some(
+              (activity) => activity.sessionId === state.activeSessionId,
+            )
+              ? state.activeSessionId
+              : undefined;
+          return {
+            activities: recomputeInterphoneOutcomes(
+              activities,
+              removed.sessionId,
+              activeSessionId,
+            ),
+            activeSessionId,
+          };
+        }),
 
       setActiveSessionId: (activeSessionId) =>
         set((state) => ({
