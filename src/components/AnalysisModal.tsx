@@ -185,6 +185,8 @@ export function AnalysisModal({ activities, onClose }: Props) {
   };
 
   const countOf = (key: AnalysisCountKey) => sessionsForKey(key).size;
+  const actualCountOf = (key: FunnelStage) =>
+    periodActivities.filter((activity) => activity.type === key).length;
   const pressCount = periodActivities.filter(
     (activity) => activity.type === 'interphone',
   ).length;
@@ -287,13 +289,46 @@ export function AnalysisModal({ activities, onClose }: Props) {
 
           <section>
             <div className="mb-1.5 flex items-end justify-between px-1">
-              <h3 className="text-xs font-bold text-slate-500">営業ファネル</h3>
+              <div>
+                <h3 className="text-xs font-bold text-slate-500">期間実績</h3>
+                <p className="text-[9px] text-slate-400">期間内に記録された件数</p>
+              </div>
               <div className="text-right text-[10px] text-slate-400">
-                <p>実押下 {pressCount}回・無応答 {noResponsePresses}回</p>
+                <p>無応答 {noResponsePresses}回</p>
+                {carryoverSales > 0 && <p>持越し成約 {carryoverSales}件</p>}
+              </div>
+            </div>
+            <div className="grid grid-cols-4 gap-1.5">
+              {FUNNEL_STEPS.map((step) => (
+                <div
+                  key={step.key}
+                  className="min-w-0 rounded-lg bg-cyan-700 px-0.5 py-2 text-center text-white"
+                >
+                  <p className="truncate text-[9px] font-semibold opacity-80">
+                    {step.shortLabel}
+                  </p>
+                  <p className="num mt-1 text-lg font-bold leading-none">
+                    {actualCountOf(step.key)}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </section>
+          <section className="mt-3">
+            <div className="mb-1.5 flex items-end justify-between px-1">
+              <div>
+                <h3 className="text-xs font-bold text-slate-500">
+                  世帯ファネル到達
+                </h3>
+                <p className="text-[9px] text-slate-400">
+                  過去の到達確認を含む1世帯1回の集計
+                </p>
+              </div>
+              <div className="text-right text-[10px] text-slate-400">
+                <p>実押下 {pressCount}回</p>
                 {carryoverSessions > 0 && (
                   <p>過去活動からの継続 {carryoverSessions}世帯</p>
                 )}
-                {carryoverSales > 0 && <p>持越し成約 {carryoverSales}件</p>}
               </div>
             </div>
             <div className="grid grid-cols-4 gap-1.5">
@@ -315,7 +350,7 @@ export function AnalysisModal({ activities, onClose }: Props) {
 
           <section className="mt-3">
             <h3 className="mb-1.5 px-1 text-xs font-bold text-slate-500">
-              コンバージョン率
+              世帯ファネル到達率
             </h3>
             <div className="grid grid-cols-2 gap-2">
               {METRICS.map((metric) => {
@@ -352,7 +387,7 @@ export function AnalysisModal({ activities, onClose }: Props) {
           </section>
 
           <p className="mt-3 px-1 text-[10px] leading-relaxed text-slate-400">
-            期間内に活動した世帯を対象に、以前の到達確認も含めて各段階を1世帯1回で集計します。実押下回数は別表示です。
+            期間実績は、その期間に保存された記録をそのまま表示します。世帯ファネル到達と到達率は、期間内に活動した世帯の以前の到達確認も含めます。
           </p>
         </div>
       </div>
