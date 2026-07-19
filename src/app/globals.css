@@ -208,6 +208,7 @@ body {
   border-radius: 0;
   background: transparent;
   font-size: 16px;
+  line-height: 2.75rem;
   -webkit-appearance: none;
   appearance: none;
 }
@@ -222,8 +223,19 @@ body {
 }
 
 .appointment-native-field::-webkit-date-and-time-value {
+  display: flex;
+  height: 100%;
   min-width: 0;
+  align-items: center;
+  line-height: 2.75rem;
   text-align: left;
+}
+
+.appointment-native-field::-webkit-datetime-edit {
+  display: flex;
+  height: 100%;
+  align-items: center;
+  padding: 0;
 }
 
 .appointment-native-field::-webkit-calendar-picker-indicator {
