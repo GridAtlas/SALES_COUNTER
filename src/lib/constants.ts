@@ -9,6 +9,7 @@ import type {
   PresentationLocation,
   ProspectRating,
   RejectionReason,
+  SaleEntryKind,
 } from '@/types';
 
 /**
@@ -78,6 +79,11 @@ export const PRESENTATION_ENTRY_KINDS: PresentationEntryKind[] = [
   'アポ訪問',
 ];
 
+export const SALE_ENTRY_KINDS: SaleEntryKind[] = [
+  '新規プレゼン',
+  '保留／見込からの成約',
+];
+
 export const PROSPECT_RATINGS: ProspectRating[] = [1, 2, 3, 4, 5];
 
 export const PRESENTATION_LOCATIONS: PresentationLocation[] = [
@@ -91,6 +97,7 @@ export const REJECTION_REASONS: RejectionReason[] = [
   '必要性を感じない',
   '料金が高い',
   'タイミングが悪い',
+  '私ではわからない',
   'その他',
 ];
 

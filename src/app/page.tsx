@@ -27,6 +27,7 @@ import {
   getActivityDef,
   INTERPHONE_RESPONSE_KINDS,
   PRESENTATION_ENTRY_KINDS,
+  SALE_ENTRY_KINDS,
 } from '@/lib/constants';
 import { requestCurrentGps } from '@/lib/geolocation';
 import { useCounterStore } from '@/store/useCounterStore';
@@ -48,6 +49,7 @@ import type {
   PresentationLocation,
   ProspectRating,
   RejectionReason,
+  SaleEntryKind,
 } from '@/types';
 
 const AUTO_EVENT_GAP_MS = 10_000;
@@ -128,7 +130,8 @@ type FlowTask =
   | { kind: 'presentation' }
   | { kind: 'presentation_location'; entryKind: PresentationEntryKind }
   | { kind: 'prospect' }
-  | { kind: 'sale' };
+  | { kind: 'sale' }
+  | { kind: 'append_sale'; entryKind?: SaleEntryKind };
 
 type FlowModal =
   | { kind: 'customer_status' }
@@ -153,7 +156,8 @@ type FlowModal =
     }
   | { kind: 'presentation_entry' }
   | { kind: 'presentation_location'; entryKind: PresentationEntryKind }
-  | { kind: 'prospect' };
+  | { kind: 'prospect' }
+  | { kind: 'sale_entry' };
 
 interface FunnelFlow {
   finalTarget: FunnelTarget;
@@ -453,11 +457,22 @@ export default function HomePage() {
         continue;
       }
 
-      if (previousType === 'presentation') {
-        next.planned.push({ id: flowId(), type: 'sale', details: {} });
-      } else {
-        next.tasks.unshift({ kind: 'presentation' }, { kind: 'sale' });
+      if (task.kind === 'sale') {
+        if (previousType === 'presentation') {
+          next.tasks.unshift({ kind: 'append_sale' });
+        } else {
+          next.modal = { kind: 'sale_entry' };
+          setFunnelFlow(next);
+          return;
+        }
+        continue;
       }
+
+      next.planned.push({
+        id: flowId(),
+        type: 'sale',
+        details: { saleEntryKind: task.entryKind },
+      });
     }
 
     finishFunnelFlow(next);
@@ -704,6 +719,22 @@ export default function HomePage() {
     ]);
   };
 
+  const handleSaleEntrySelect = (saleEntryKind: SaleEntryKind) => {
+    if (!funnelFlow) return;
+    const tasks: FlowTask[] =
+      saleEntryKind === '新規プレゼン'
+        ? [
+            { kind: 'presentation' },
+            { kind: 'append_sale', entryKind: saleEntryKind },
+            ...funnelFlow.tasks,
+          ]
+        : [
+            { kind: 'append_sale', entryKind: saleEntryKind },
+            ...funnelFlow.tasks,
+          ];
+    continueFunnelFlow(funnelFlow.planned, tasks);
+  };
+
   const handleRejectionReasonSelect = (
     rejectionReason: RejectionReason,
     rejectionReasonDetail?: string,
@@ -864,6 +895,16 @@ export default function HomePage() {
           appointments={funnelFlow.modal.appointments}
           onSelect={handleAppointmentTargetSelect}
           onCreate={handleCreateAppointmentForVisit}
+          onCancel={cancelFunnelFlow}
+        />
+      )}
+
+      {funnelFlow?.modal?.kind === 'sale_entry' && (
+        <ChoiceModal
+          title="セールス前確認"
+          description="今回の成約経路を選択してください"
+          options={SALE_ENTRY_KINDS}
+          onSelect={handleSaleEntrySelect}
           onCancel={cancelFunnelFlow}
         />
       )}

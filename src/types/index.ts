@@ -45,6 +45,8 @@ export type AppointmentAcquisitionKind = '対面取得' | 'その他取得';
 
 export type PresentationEntryKind = '即プレゼン' | 'アポ訪問';
 
+export type SaleEntryKind = '新規プレゼン' | '保留／見込からの成約';
+
 export type ProspectRating = 1 | 2 | 3 | 4 | 5;
 
 export type PresentationLocation = '玄関外' | '玄関内' | '宅内';
@@ -54,6 +56,7 @@ export type RejectionReason =
   | '必要性を感じない'
   | '料金が高い'
   | 'タイミングが悪い'
+  | '私ではわからない'
   | 'やるなら連絡する' // 旧データ互換
   | 'その他';
 
@@ -93,6 +96,7 @@ export interface ActivityDetails {
   linkedAppointmentLabel?: string;
   presentationEntryKind?: PresentationEntryKind;
   presentationLocation?: PresentationLocation;
+  saleEntryKind?: SaleEntryKind;
   rejectionReason?: RejectionReason;
   rejectionReasonDetail?: string;
   appointmentDate?: string;

@@ -53,6 +53,7 @@ const activityDetails = (activity: Activity): string[] => {
       : undefined,
     activity.presentationEntryKind,
     activity.presentationLocation,
+    activity.saleEntryKind,
     rejectionReason,
     appointmentSchedule,
     activity.appointmentMemo ? `メモ：${activity.appointmentMemo}` : undefined,

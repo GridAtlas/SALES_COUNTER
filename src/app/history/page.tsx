@@ -44,6 +44,7 @@ const activityDetailLabels = (activity: Activity): string[] => {
       : undefined,
     activity.presentationEntryKind,
     activity.presentationLocation,
+    activity.saleEntryKind,
     rejectionReason,
     appointmentSchedule,
     appointmentMemo,
