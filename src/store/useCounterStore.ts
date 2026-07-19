@@ -2,13 +2,10 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { Activity, ActivityDetails, ActivityType } from '@/types';
 
-/**
- * 記録形式は「1 タップ = 1 レコード」。
- * 集計だけならカウンター整数で足りるが、履歴 (時刻表示・時間帯分析) が
- * 要件なので生ログを持つ。日次リセット時は activities を空にする。
- */
 interface CounterState {
   activities: Activity[];
+  periodStartedAt: number;
+  activeSessionId?: string;
 
   add: (
     type: ActivityType,
@@ -17,7 +14,8 @@ interface CounterState {
     id?: string,
   ) => string;
   updateActivity: (id: string, details: ActivityDetails) => void;
-  undoLast: () => void; // 一番最後のレコードを削除（種別問わず）
+  setActiveSessionId: (sessionId?: string) => void;
+  undoLast: () => void;
   reset: () => void;
 
   countOf: (type: ActivityType) => number;
@@ -27,29 +25,124 @@ interface CounterState {
 const uid = () =>
   `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
-const migrateContactActivities = (activities: Activity[]) =>
-  activities.map((activity): Activity => {
+const SESSION_ACTIVITY_TYPES = new Set<ActivityType>([
+  'interphone',
+  'interphone_response',
+  'face_to_face_contact',
+  'first_contact',
+  'revisit',
+  'rejection_close',
+  'appointment',
+  'appointment_visit',
+  'pre_presentation_rejection',
+  'presentation',
+  'post_presentation_rejection',
+  'prospect',
+  'sale',
+]);
+
+const TERMINAL_ACTIVITY_TYPES = new Set<ActivityType>([
+  'rejection_close',
+  'pre_presentation_rejection',
+  'post_presentation_rejection',
+  'sale',
+]);
+
+const migrateActivities = (activities: Activity[]) => {
+  let currentSessionId: string | undefined;
+
+  return activities.map((source): Activity => {
+    let activity = source;
     if (activity.type === 'first_contact') {
-      return {
+      activity = {
         ...activity,
         type: 'face_to_face_contact',
         faceContactKind: '初回',
       };
-    }
-    if (activity.type === 'revisit') {
-      return {
+    } else if (activity.type === 'revisit') {
+      activity = {
         ...activity,
         type: 'face_to_face_contact',
         faceContactKind: '2回目以降',
       };
     }
-    return activity;
+
+    if (activity.type === 'interphone') {
+      currentSessionId = activity.sessionId ?? `legacy-session-${activity.id}`;
+    } else if (
+      SESSION_ACTIVITY_TYPES.has(activity.type) &&
+      !activity.sessionId &&
+      !currentSessionId
+    ) {
+      currentSessionId = `legacy-session-${activity.id}`;
+    }
+
+    const migrated: Activity = {
+      ...activity,
+      sessionId:
+        activity.sessionId ??
+        (SESSION_ACTIVITY_TYPES.has(activity.type)
+          ? currentSessionId
+          : undefined),
+      operationId: activity.operationId ?? activity.id,
+      recordSource: activity.recordSource ?? 'legacy',
+    };
+
+    if (TERMINAL_ACTIVITY_TYPES.has(migrated.type)) {
+      currentSessionId = undefined;
+    }
+    return migrated;
   });
+};
+
+const latestSessionId = (activities: Activity[]) =>
+  [...activities].reverse().find((activity) => activity.sessionId)?.sessionId;
+
+const recomputeInterphoneOutcomes = (
+  activities: Activity[],
+  affectedSessionId: string | undefined,
+  activeSessionId: string | undefined,
+) => {
+  if (!affectedSessionId) return activities;
+  const sessionPresses = activities.filter(
+    (activity) =>
+      activity.sessionId === affectedSessionId &&
+      activity.type === 'interphone',
+  );
+  if (sessionPresses.length === 0) return activities;
+  const responded = activities.some(
+    (activity) =>
+      activity.sessionId === affectedSessionId &&
+      activity.type === 'interphone_response',
+  );
+  const latestPressId = sessionPresses[sessionPresses.length - 1].id;
+
+  return activities.map((activity) => {
+    if (
+      activity.sessionId !== affectedSessionId ||
+      activity.type !== 'interphone'
+    ) {
+      return activity;
+    }
+    const interphoneAttemptOutcome: Activity['interphoneAttemptOutcome'] =
+      responded
+        ? activity.id === latestPressId
+          ? '応答'
+          : '無応答'
+        : activity.id === latestPressId &&
+            activeSessionId === affectedSessionId
+          ? undefined
+          : '無応答';
+    return { ...activity, interphoneAttemptOutcome };
+  });
+};
 
 export const useCounterStore = create<CounterState>()(
   persist(
     (set, get) => ({
       activities: [],
+      periodStartedAt: 0,
+      activeSessionId: undefined,
 
       add: (type, details = {}, timestamp = Date.now(), requestedId) => {
         const id = requestedId ?? uid();
@@ -69,12 +162,45 @@ export const useCounterStore = create<CounterState>()(
           ),
         })),
 
-      undoLast: () =>
-        set((state) => ({
-          activities: state.activities.slice(0, -1),
-        })),
+      setActiveSessionId: (activeSessionId) => set({ activeSessionId }),
 
-      reset: () => set({ activities: [] }),
+      undoLast: () =>
+        set((state) => {
+          const last = state.activities[state.activities.length - 1];
+          if (!last) return state;
+          const remaining = last.operationId
+            ? state.activities.filter(
+                (activity) => activity.operationId !== last.operationId,
+              )
+            : state.activities.slice(0, -1);
+          const activeStillExists =
+            state.activeSessionId &&
+            remaining.some(
+              (activity) => activity.sessionId === state.activeSessionId,
+            );
+          const nextActiveSessionId = activeStillExists
+            ? state.activeSessionId
+            : latestSessionId(remaining);
+          return {
+            activities: recomputeInterphoneOutcomes(
+              remaining,
+              last.sessionId,
+              nextActiveSessionId,
+            ),
+            activeSessionId: nextActiveSessionId,
+          };
+        }),
+
+      reset: () =>
+        set((state) => ({
+          activities: recomputeInterphoneOutcomes(
+            state.activities,
+            state.activeSessionId,
+            undefined,
+          ),
+          periodStartedAt: Date.now(),
+          activeSessionId: undefined,
+        })),
 
       countOf: (type) =>
         get().activities.filter((activity) => activity.type === type).length,
@@ -83,12 +209,16 @@ export const useCounterStore = create<CounterState>()(
     }),
     {
       name: 'sales-counter-store',
-      version: 2,
+      version: 3,
       migrate: (persistedState) => {
         const state = persistedState as Partial<CounterState>;
+        const activities = migrateActivities(state.activities ?? []);
         return {
           ...state,
-          activities: migrateContactActivities(state.activities ?? []),
+          activities,
+          periodStartedAt: state.periodStartedAt ?? 0,
+          activeSessionId:
+            state.activeSessionId ?? latestSessionId(activities),
         } as CounterState;
       },
     },

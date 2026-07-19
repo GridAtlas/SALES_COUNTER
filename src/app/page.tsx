@@ -16,6 +16,7 @@ import { DailyReportList } from '@/components/DailyReportList';
 import { PresentationLocationModal } from '@/components/PresentationLocationModal';
 import { ProspectList } from '@/components/ProspectList';
 import { ProspectModal } from '@/components/ProspectModal';
+import { ProspectTargetModal } from '@/components/ProspectTargetModal';
 import { RejectionReasonModal } from '@/components/RejectionReasonModal';
 import { ViewTabs, type HomeView } from '@/components/ViewTabs';
 import { BottomBar } from '@/components/BottomBar';
@@ -36,6 +37,7 @@ import { useSettingsStore } from '@/store/useSettingsStore';
 import type {
   Activity,
   ActivityDetails,
+  ActivityRecordSource,
   ActivityType,
   AgeGroup,
   AppointmentAcquisitionKind,
@@ -53,6 +55,7 @@ import type {
 } from '@/types';
 
 const AUTO_EVENT_GAP_MS = 10_000;
+const SAME_HOUSEHOLD_PRESS_WINDOW_MS = 60_000;
 
 const localDateKey = (timestamp: number) => {
   const date = new Date(timestamp);
@@ -86,6 +89,12 @@ const appointmentDisplayLabel = (details: ActivityDetails) => {
 const flowId = () =>
   `flow-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
+const sessionId = () =>
+  'session-' +
+  Date.now().toString(36) +
+  '-' +
+  Math.random().toString(36).slice(2, 8);
+
 type FunnelTarget =
   | 'interphone'
   | 'interphone_response'
@@ -100,6 +109,7 @@ type PlannedActivity = {
   id: string;
   type: ActivityType;
   details: ActivityDetails;
+  recordSource: ActivityRecordSource;
 };
 
 type FlowTask =
@@ -128,10 +138,17 @@ type FlowTask =
       appointmentLabel?: string;
     }
   | { kind: 'presentation' }
+  | { kind: 'ensure_instant_appointment' }
+  | { kind: 'ensure_instant_visit' }
   | { kind: 'presentation_location'; entryKind: PresentationEntryKind }
   | { kind: 'prospect' }
   | { kind: 'sale' }
-  | { kind: 'append_sale'; entryKind?: SaleEntryKind };
+  | {
+      kind: 'append_sale';
+      entryKind?: SaleEntryKind;
+      linkedProspectId?: string;
+      linkedProspectLabel?: string;
+    };
 
 type FlowModal =
   | { kind: 'customer_status' }
@@ -157,9 +174,13 @@ type FlowModal =
   | { kind: 'presentation_entry' }
   | { kind: 'presentation_location'; entryKind: PresentationEntryKind }
   | { kind: 'prospect' }
-  | { kind: 'sale_entry' };
+  | { kind: 'sale_entry' }
+  | { kind: 'prospect_target'; prospects: Activity[] };
 
 interface FunnelFlow {
+  sessionId: string;
+  operationId: string;
+  closePressId?: string;
   finalTarget: FunnelTarget;
   anchorTimestamp: number;
   planned: PlannedActivity[];
@@ -197,8 +218,13 @@ export default function HomePage() {
   useEffect(() => setHydrated(true), []);
 
   const activities = useCounterStore((state) => state.activities);
+  const periodStartedAt = useCounterStore((state) => state.periodStartedAt);
+  const activeSessionId = useCounterStore((state) => state.activeSessionId);
   const add = useCounterStore((state) => state.add);
   const updateActivity = useCounterStore((state) => state.updateActivity);
+  const setActiveSessionId = useCounterStore(
+    (state) => state.setActiveSessionId,
+  );
   const undoLast = useCounterStore((state) => state.undoLast);
   const reset = useCounterStore((state) => state.reset);
   const dailyReports = useDailyReportStore((state) => state.reports);
@@ -208,9 +234,26 @@ export default function HomePage() {
   const gpsEnabled = useSettingsStore((state) => state.gpsEnabled);
   const setGpsEnabled = useSettingsStore((state) => state.setGpsEnabled);
 
+  const counterActivities = useMemo(() => {
+    if (!hydrated) return [];
+    const currentOperationIds = new Set(
+      activities
+        .filter((activity) => activity.timestamp > periodStartedAt)
+        .map((activity) => activity.operationId)
+        .filter((id): id is string => Boolean(id)),
+    );
+    return activities.filter(
+      (activity) =>
+        activity.timestamp > periodStartedAt ||
+        Boolean(
+          activity.operationId &&
+            currentOperationIds.has(activity.operationId),
+        ),
+    );
+  }, [activities, hydrated, periodStartedAt]);
   const countOf = (type: string) =>
-    hydrated ? activities.filter((activity) => activity.type === type).length : 0;
-  const total = hydrated ? activities.length : 0;
+    counterActivities.filter((activity) => activity.type === type).length;
+  const total = counterActivities.length;
   const reportDate = localDateKey(Date.now());
   const todaysActivities = useMemo(
     () =>
@@ -240,14 +283,28 @@ export default function HomePage() {
     [activities, hydrated],
   );
 
+  const soldSessionIds = useMemo(
+    () =>
+      new Set(
+        activities
+          .filter((activity) => activity.type === 'sale' && activity.sessionId)
+          .map((activity) => activity.sessionId!),
+      ),
+    [activities],
+  );
+
   const prospects = useMemo(
     () =>
       hydrated
         ? activities
-            .filter((activity) => activity.type === 'prospect')
+            .filter(
+              (activity) =>
+                activity.type === 'prospect' &&
+                (!activity.sessionId || !soldSessionIds.has(activity.sessionId)),
+            )
             .sort((left, right) => right.timestamp - left.timestamp)
         : [],
-    [activities, hydrated],
+    [activities, hydrated, soldSessionIds],
   );
 
   const createGpsPromise = (): Promise<GpsDetails> =>
@@ -292,26 +349,96 @@ export default function HomePage() {
     setFunnelFlow(null);
   };
 
-  const previousTypeOf = (flow: FunnelFlow): ActivityType | undefined =>
-    flow.planned[flow.planned.length - 1]?.type ??
-    activities[activities.length - 1]?.type;
+  const sessionActivitiesOf = (flow: FunnelFlow) =>
+    activities.filter((activity) => activity.sessionId === flow.sessionId);
+
+  const sessionHasType = (flow: FunnelFlow, type: ActivityType) =>
+    sessionActivitiesOf(flow).some((activity) => activity.type === type) ||
+    flow.planned.some((activity) => activity.type === type);
+
+  const latestSessionRecord = (flow: FunnelFlow, type: ActivityType) =>
+    [...sessionActivitiesOf(flow), ...flow.planned]
+      .reverse()
+      .find((activity) => activity.type === type);
+
+  const latestSessionActivity = (flow: FunnelFlow) =>
+    flow.planned[flow.planned.length - 1] ??
+    sessionActivitiesOf(flow)[sessionActivitiesOf(flow).length - 1];
+
+  const recordSourceFor = (
+    flow: FunnelFlow,
+    type: ActivityType,
+  ): ActivityRecordSource =>
+    type === flow.finalTarget ? 'manual' : 'auto_backfill';
 
   const finishFunnelFlow = (flow: FunnelFlow) => {
     const gpsPromise = pendingGpsRef.current ?? createGpsPromise();
     pendingGpsRef.current = null;
+    const storedSessionActivities = sessionActivitiesOf(flow);
+    const lastStoredTimestamp =
+      storedSessionActivities[storedSessionActivities.length - 1]?.timestamp;
+    const spacing =
+      lastStoredTimestamp === undefined
+        ? AUTO_EVENT_GAP_MS
+        : Math.max(
+            1,
+            Math.min(
+              AUTO_EVENT_GAP_MS,
+              Math.floor(
+                (flow.anchorTimestamp - lastStoredTimestamp) /
+                  Math.max(flow.planned.length, 1),
+              ),
+            ),
+          );
     const firstTimestamp =
-      flow.anchorTimestamp - AUTO_EVENT_GAP_MS * (flow.planned.length - 1);
+      lastStoredTimestamp === undefined
+        ? flow.anchorTimestamp -
+          AUTO_EVENT_GAP_MS * (flow.planned.length - 1)
+        : lastStoredTimestamp + spacing;
+
+    if (flow.closePressId) {
+      updateActivity(flow.closePressId, {
+        interphoneAttemptOutcome: '無応答',
+      });
+    }
+
+    const responsePlanned = flow.planned.some(
+      (planned) => planned.type === 'interphone_response',
+    );
+    if (responsePlanned) {
+      const plannedPress = [...flow.planned]
+        .reverse()
+        .find((planned) => planned.type === 'interphone');
+      if (plannedPress) {
+        plannedPress.details.interphoneAttemptOutcome = '応答';
+      } else {
+        const storedPress = [...sessionActivitiesOf(flow)]
+          .reverse()
+          .find((activity) => activity.type === 'interphone');
+        if (storedPress) {
+          updateActivity(storedPress.id, {
+            interphoneAttemptOutcome: '応答',
+          });
+        }
+      }
+    }
 
     flow.planned.forEach((planned, index) => {
       recordActivity(
         planned.type,
-        planned.details,
+        {
+          ...planned.details,
+          sessionId: flow.sessionId,
+          operationId: flow.operationId,
+          recordSource: planned.recordSource,
+        },
         gpsPromise,
-        firstTimestamp + AUTO_EVENT_GAP_MS * index,
+        firstTimestamp + spacing * index,
         planned.id,
       );
     });
 
+    setActiveSessionId(flow.finalTarget === 'sale' ? undefined : flow.sessionId);
     setFunnelFlow(null);
     if (flow.finalTarget === 'appointment') setActiveView('appointments');
     if (flow.finalTarget === 'prospect') setActiveView('prospects');
@@ -327,10 +454,9 @@ export default function HomePage() {
 
     while (next.tasks.length > 0) {
       const task = next.tasks.shift()!;
-      const previousType = previousTypeOf(next);
 
       if (task.kind === 'ensure_interphone') {
-        if (previousType !== 'interphone') {
+        if (!sessionHasType(next, 'interphone')) {
           next.tasks.unshift({ kind: 'interphone' });
         }
         continue;
@@ -343,7 +469,7 @@ export default function HomePage() {
       }
 
       if (task.kind === 'ensure_interphone_response') {
-        if (previousType !== 'interphone_response') {
+        if (!sessionHasType(next, 'interphone_response')) {
           next.tasks.unshift(
             { kind: 'ensure_interphone' },
             { kind: 'interphone_response' },
@@ -353,13 +479,14 @@ export default function HomePage() {
       }
 
       if (task.kind === 'interphone_response') {
+        if (sessionHasType(next, 'interphone_response')) continue;
         next.modal = { kind: 'interphone_response' };
         setFunnelFlow(next);
         return;
       }
 
       if (task.kind === 'ensure_face_contact') {
-        if (previousType !== 'face_to_face_contact') {
+        if (!sessionHasType(next, 'face_to_face_contact')) {
           next.tasks.unshift(
             { kind: 'ensure_interphone_response' },
             { kind: 'face_contact' },
@@ -369,13 +496,15 @@ export default function HomePage() {
       }
 
       if (task.kind === 'face_contact') {
+        if (sessionHasType(next, 'face_to_face_contact')) continue;
         next.modal = { kind: 'face_contact' };
         setFunnelFlow(next);
         return;
       }
 
       if (task.kind === 'appointment') {
-        if (previousType === 'face_to_face_contact') {
+        if (sessionHasType(next, 'appointment')) continue;
+        if (sessionHasType(next, 'face_to_face_contact')) {
           next.tasks.unshift({
             kind: 'appointment_form',
             appointmentId: task.appointmentId,
@@ -406,12 +535,14 @@ export default function HomePage() {
       }
 
       if (task.kind === 'appointment_visit') {
+        if (sessionHasType(next, 'appointment_visit')) continue;
         next.modal = { kind: 'appointment_visit_kind' };
         setFunnelFlow(next);
         return;
       }
 
       if (task.kind === 'append_appointment_visit') {
+        if (sessionHasType(next, 'appointment_visit')) continue;
         next.planned.push({
           id: flowId(),
           type: 'appointment_visit',
@@ -420,12 +551,45 @@ export default function HomePage() {
             linkedAppointmentId: task.appointmentId,
             linkedAppointmentLabel: task.appointmentLabel,
           },
+          recordSource: recordSourceFor(next, 'appointment_visit'),
+        });
+        continue;
+      }
+
+      if (task.kind === 'ensure_instant_appointment') {
+        if (sessionHasType(next, 'appointment')) continue;
+        next.planned.push({
+          id: flowId(),
+          type: 'appointment',
+          details: {
+            appointmentAcquisitionKind: '対面取得',
+            appointmentCategory: '当日取得アポ',
+            appointmentMemo: '即プレゼンによる自動補完',
+          },
+          recordSource: 'auto_backfill',
+        });
+        continue;
+      }
+
+      if (task.kind === 'ensure_instant_visit') {
+        if (sessionHasType(next, 'appointment_visit')) continue;
+        const appointment = latestSessionRecord(next, 'appointment');
+        next.planned.push({
+          id: flowId(),
+          type: 'appointment_visit',
+          details: {
+            appointmentVisitKind: '当日取得アポ',
+            linkedAppointmentId: appointment?.id,
+            linkedAppointmentLabel: '即プレゼン補完',
+          },
+          recordSource: 'auto_backfill',
         });
         continue;
       }
 
       if (task.kind === 'presentation') {
-        if (previousType === 'appointment_visit') {
+        if (sessionHasType(next, 'presentation')) continue;
+        if (sessionHasType(next, 'appointment_visit')) {
           next.tasks.unshift({
             kind: 'presentation_location',
             entryKind: 'アポ訪問',
@@ -448,7 +612,8 @@ export default function HomePage() {
       }
 
       if (task.kind === 'prospect') {
-        if (previousType === 'presentation') {
+        if (sessionHasType(next, 'prospect')) continue;
+        if (sessionHasType(next, 'presentation')) {
           next.modal = { kind: 'prospect' };
           setFunnelFlow(next);
           return;
@@ -458,7 +623,8 @@ export default function HomePage() {
       }
 
       if (task.kind === 'sale') {
-        if (previousType === 'presentation') {
+        if (sessionHasType(next, 'sale')) continue;
+        if (latestSessionActivity(next)?.type === 'presentation') {
           next.tasks.unshift({ kind: 'append_sale' });
         } else {
           next.modal = { kind: 'sale_entry' };
@@ -471,24 +637,78 @@ export default function HomePage() {
       next.planned.push({
         id: flowId(),
         type: 'sale',
-        details: { saleEntryKind: task.entryKind },
+        details: {
+          saleEntryKind: task.entryKind,
+          linkedProspectId: task.linkedProspectId,
+          linkedProspectLabel: task.linkedProspectLabel,
+        },
+        recordSource: recordSourceFor(next, 'sale'),
       });
     }
 
     finishFunnelFlow(next);
   };
 
+  const selectSessionForTarget = (
+    type: FunnelTarget,
+    now: number,
+  ): { selectedSessionId: string; closePressId?: string } => {
+    const activeEvents = activeSessionId
+      ? activities.filter((activity) => activity.sessionId === activeSessionId)
+      : [];
+
+    if (type === 'interphone') {
+      const lastPress = [...activeEvents]
+        .reverse()
+        .find((activity) => activity.type === 'interphone');
+      const responded = activeEvents.some(
+        (activity) => activity.type === 'interphone_response',
+      );
+      const awaitingResponse = Boolean(lastPress && !responded);
+      const reuse =
+        awaitingResponse &&
+        lastPress !== undefined &&
+        now - lastPress.timestamp <= SAME_HOUSEHOLD_PRESS_WINDOW_MS;
+      return {
+        selectedSessionId:
+          reuse && activeSessionId ? activeSessionId : sessionId(),
+        closePressId: awaitingResponse ? lastPress?.id : undefined,
+      };
+    }
+
+    const alreadyReached = activeEvents.some(
+      (activity) => activity.type === type,
+    );
+    const terminal = activeEvents.some(
+      (activity) =>
+        activity.type === 'sale' ||
+        activity.type === 'rejection_close' ||
+        activity.type === 'pre_presentation_rejection' ||
+        activity.type === 'post_presentation_rejection',
+    );
+    return {
+      selectedSessionId:
+        activeSessionId && !alreadyReached && !terminal
+          ? activeSessionId
+          : sessionId(),
+    };
+  };
+
   const startFunnelFlow = (type: FunnelTarget) => {
+    const now = Date.now();
+    const selection = selectSessionForTarget(type, now);
     pendingGpsRef.current = createGpsPromise();
     advanceFunnelFlow({
+      sessionId: selection.selectedSessionId,
+      operationId: flowId(),
+      closePressId: selection.closePressId,
       finalTarget: type,
-      anchorTimestamp: Date.now(),
+      anchorTimestamp: now,
       planned: [],
       tasks: tasksForTarget(type),
       modal: null,
     });
   };
-
   const continueFunnelFlow = (
     planned: PlannedActivity[],
     tasks = funnelFlow?.tasks ?? [],
@@ -527,7 +747,7 @@ export default function HomePage() {
       setPendingRejectionType(type);
       return;
     }
-    recordActivity(type, {}, gpsPromise);
+    recordActivity(type, { operationId: flowId(), recordSource: 'manual' }, gpsPromise);
   };
 
   const handleCustomerStatusSelect = (customerStatus: CustomerStatus) => {
@@ -538,6 +758,7 @@ export default function HomePage() {
         id: flowId(),
         type: 'interphone',
         details: { customerStatus },
+        recordSource: recordSourceFor(funnelFlow, 'interphone'),
       },
     ]);
   };
@@ -552,6 +773,7 @@ export default function HomePage() {
         id: flowId(),
         type: 'interphone_response',
         details: { interphoneResponseKind },
+        recordSource: recordSourceFor(funnelFlow, 'interphone_response'),
       },
     ]);
   };
@@ -567,6 +789,7 @@ export default function HomePage() {
         id: flowId(),
         type: 'face_to_face_contact',
         details: { faceContactKind, ageGroup },
+        recordSource: recordSourceFor(funnelFlow, 'face_to_face_contact'),
       },
     ]);
   };
@@ -618,6 +841,7 @@ export default function HomePage() {
             appointmentAcquisitionKind: acquisitionKind,
             appointmentCategory,
           },
+          recordSource: recordSourceFor(funnelFlow, 'appointment'),
         },
       ],
       tasks,
@@ -628,9 +852,19 @@ export default function HomePage() {
     appointmentVisitKind: AppointmentVisitKind,
   ) => {
     if (!funnelFlow) return;
+    const visitedSessionIds = new Set(
+      activities
+        .filter(
+          (activity) =>
+            activity.type === 'appointment_visit' && activity.sessionId,
+        )
+        .map((activity) => activity.sessionId!),
+    );
     const matchingAppointments = appointments.filter(
       (appointment) =>
-        appointmentCategoryOf(appointment) === appointmentVisitKind,
+        appointmentCategoryOf(appointment) === appointmentVisitKind &&
+        (!appointment.sessionId ||
+          !visitedSessionIds.has(appointment.sessionId)),
     );
     setFunnelFlow({
       ...funnelFlow,
@@ -645,18 +879,23 @@ export default function HomePage() {
   const handleAppointmentTargetSelect = (appointment: Activity) => {
     if (!funnelFlow || funnelFlow.modal?.kind !== 'appointment_target') return;
     const visitKind = funnelFlow.modal.visitKind;
-    continueFunnelFlow([
-      ...funnelFlow.planned,
-      {
-        id: flowId(),
-        type: 'appointment_visit',
-        details: {
-          appointmentVisitKind: visitKind,
-          linkedAppointmentId: appointment.id,
-          linkedAppointmentLabel: appointmentDisplayLabel(appointment),
+    const targetSessionId = appointment.sessionId ?? funnelFlow.sessionId;
+    advanceFunnelFlow({
+      ...funnelFlow,
+      sessionId: targetSessionId,
+      planned: [],
+      tasks: [
+        { kind: 'ensure_face_contact' },
+        {
+          kind: 'append_appointment_visit',
+          visitKind,
+          appointmentId: appointment.id,
+          appointmentLabel: appointmentDisplayLabel(appointment),
         },
-      },
-    ]);
+        ...funnelFlow.tasks,
+      ],
+      modal: null,
+    });
   };
 
   const handleCreateAppointmentForVisit = () => {
@@ -664,6 +903,7 @@ export default function HomePage() {
     const visitKind = funnelFlow.modal.visitKind;
     const appointmentId = flowId();
     continueFunnelFlow(funnelFlow.planned, [
+      { kind: 'ensure_face_contact' },
       {
         kind: 'appointment',
         appointmentId,
@@ -677,7 +917,6 @@ export default function HomePage() {
       ...funnelFlow.tasks,
     ]);
   };
-
   const handlePresentationEntrySelect = (
     presentationEntryKind: PresentationEntryKind,
   ) => {
@@ -685,6 +924,9 @@ export default function HomePage() {
     const tasks: FlowTask[] =
       presentationEntryKind === '即プレゼン'
         ? [
+            { kind: 'ensure_face_contact' },
+            { kind: 'ensure_instant_appointment' },
+            { kind: 'ensure_instant_visit' },
             {
               kind: 'presentation_location',
               entryKind: presentationEntryKind,
@@ -715,26 +957,59 @@ export default function HomePage() {
           presentationEntryKind: funnelFlow.modal.entryKind,
           presentationLocation,
         },
+        recordSource: recordSourceFor(funnelFlow, 'presentation'),
       },
     ]);
   };
 
   const handleSaleEntrySelect = (saleEntryKind: SaleEntryKind) => {
     if (!funnelFlow) return;
-    const tasks: FlowTask[] =
-      saleEntryKind === '新規プレゼン'
-        ? [
-            { kind: 'presentation' },
-            { kind: 'append_sale', entryKind: saleEntryKind },
-            ...funnelFlow.tasks,
-          ]
-        : [
-            { kind: 'append_sale', entryKind: saleEntryKind },
-            ...funnelFlow.tasks,
-          ];
-    continueFunnelFlow(funnelFlow.planned, tasks);
+    if (saleEntryKind === '保留／見込からの成約') {
+      setFunnelFlow({
+        ...funnelFlow,
+        modal: { kind: 'prospect_target', prospects },
+      });
+      return;
+    }
+    continueFunnelFlow(funnelFlow.planned, [
+      { kind: 'presentation' },
+      { kind: 'append_sale', entryKind: saleEntryKind },
+      ...funnelFlow.tasks,
+    ]);
   };
 
+  const handleProspectTargetSelect = (prospect: Activity) => {
+    if (!funnelFlow || funnelFlow.modal?.kind !== 'prospect_target') return;
+    const targetSessionId = prospect.sessionId ?? funnelFlow.sessionId;
+    const label =
+      prospect.prospectComment?.trim() ||
+      '見込度 ' + (prospect.prospectRating ?? 0) + ' / 5';
+    advanceFunnelFlow({
+      ...funnelFlow,
+      sessionId: targetSessionId,
+      planned: [],
+      tasks: [
+        { kind: 'presentation' },
+        {
+          kind: 'append_sale',
+          entryKind: '保留／見込からの成約',
+          linkedProspectId: prospect.id,
+          linkedProspectLabel: label,
+        },
+        ...funnelFlow.tasks,
+      ],
+      modal: null,
+    });
+  };
+
+  const handleProspectTargetNewPresentation = () => {
+    if (!funnelFlow) return;
+    continueFunnelFlow(funnelFlow.planned, [
+      { kind: 'presentation' },
+      { kind: 'append_sale', entryKind: '新規プレゼン' },
+      ...funnelFlow.tasks,
+    ]);
+  };
   const handleRejectionReasonSelect = (
     rejectionReason: RejectionReason,
     rejectionReasonDetail?: string,
@@ -743,7 +1018,11 @@ export default function HomePage() {
     recordPendingActivity(pendingRejectionType, {
       rejectionReason,
       rejectionReasonDetail,
+      sessionId: activeSessionId ?? sessionId(),
+      operationId: flowId(),
+      recordSource: 'manual',
     });
+    setActiveSessionId(undefined);
     setPendingRejectionType(null);
   };
 
@@ -758,6 +1037,7 @@ export default function HomePage() {
         id: flowId(),
         type: 'prospect',
         details: { prospectRating, prospectComment },
+        recordSource: recordSourceFor(funnelFlow, 'prospect'),
       },
     ]);
   };
@@ -909,6 +1189,15 @@ export default function HomePage() {
         />
       )}
 
+      {funnelFlow?.modal?.kind === 'prospect_target' && (
+        <ProspectTargetModal
+          prospects={funnelFlow.modal.prospects}
+          onSelect={handleProspectTargetSelect}
+          onNewPresentation={handleProspectTargetNewPresentation}
+          onCancel={cancelFunnelFlow}
+        />
+      )}
+
       {funnelFlow?.modal?.kind === 'presentation_entry' && (
         <ChoiceModal
           title="プレゼン前確認"
@@ -918,7 +1207,6 @@ export default function HomePage() {
           onCancel={cancelFunnelFlow}
         />
       )}
-
       {funnelFlow?.modal?.kind === 'presentation_location' && (
         <PresentationLocationModal
           onSelect={handlePresentationLocationSelect}
@@ -935,7 +1223,7 @@ export default function HomePage() {
 
       {showAnalysis && (
         <AnalysisModal
-          activities={activities}
+          activities={counterActivities}
           onClose={() => setShowAnalysis(false)}
         />
       )}

@@ -1,7 +1,6 @@
 'use client';
 
 import { X } from 'lucide-react';
-import { countFaceContacts } from '@/lib/contact';
 import type { Activity, ActivityType } from '@/types';
 
 interface Props {
@@ -32,63 +31,99 @@ const FUNNEL_STEPS: { key: AnalysisCountKey; shortLabel: string }[] = [
 ];
 
 const METRICS: AnalysisMetric[] = [
-  {
-    label: 'インターホン応答率',
-    description: '応答 ÷ インターホン',
-    numerator: 'interphone_response',
-    denominator: 'interphone',
-  },
-  {
-    label: '対面接触化率',
-    description: '対面接触 ÷ 応答',
-    numerator: 'face_contact_total',
-    denominator: 'interphone_response',
-  },
-  {
-    label: '初回→アポ取得率',
-    description: 'アポ取得 ÷ 初回対面',
-    numerator: 'appointment',
-    denominator: 'face_contact_initial',
-  },
-  {
-    label: 'アポ訪問率',
-    description: 'アポ訪問 ÷ アポ取得',
-    numerator: 'appointment_visit',
-    denominator: 'appointment',
-  },
-  {
-    label: '訪問→プレゼン率',
-    description: 'プレゼン ÷ アポ訪問',
-    numerator: 'presentation',
-    denominator: 'appointment_visit',
-  },
-  {
-    label: 'プレゼン→成約率',
-    description: '成約 ÷ プレゼン',
-    numerator: 'sale',
-    denominator: 'presentation',
-  },
-  {
-    label: 'プレゼン→見込率',
-    description: '保留／見込 ÷ プレゼン',
-    numerator: 'prospect',
-    denominator: 'presentation',
-  },
-  {
-    label: '初回→成約率',
-    description: '成約 ÷ 初回対面',
-    numerator: 'sale',
-    denominator: 'face_contact_initial',
-  },
+  { label: 'インターホン応答率', description: '応答世帯 ÷ 押下世帯', numerator: 'interphone_response', denominator: 'interphone' },
+  { label: '対面接触化率', description: '対面接触世帯 ÷ 応答世帯', numerator: 'face_contact_total', denominator: 'interphone_response' },
+  { label: '初回→アポ取得率', description: 'アポ取得世帯 ÷ 初回対面世帯', numerator: 'appointment', denominator: 'face_contact_initial' },
+  { label: 'アポ訪問率', description: 'アポ訪問世帯 ÷ アポ取得世帯', numerator: 'appointment_visit', denominator: 'appointment' },
+  { label: '訪問→プレゼン率', description: 'プレゼン世帯 ÷ アポ訪問世帯', numerator: 'presentation', denominator: 'appointment_visit' },
+  { label: 'プレゼン→成約率', description: '成約世帯 ÷ プレゼン世帯', numerator: 'sale', denominator: 'presentation' },
+  { label: 'プレゼン→見込率', description: '保留／見込世帯 ÷ プレゼン世帯', numerator: 'prospect', denominator: 'presentation' },
+  { label: '初回→成約率', description: '成約世帯 ÷ 初回対面世帯', numerator: 'sale', denominator: 'face_contact_initial' },
 ];
 
+const sessionKey = (activity: Activity) =>
+  activity.sessionId ?? 'legacy-' + activity.id;
+
 export function AnalysisModal({ activities, onClose }: Props) {
-  const countOf = (key: AnalysisCountKey) => {
-    if (key === 'face_contact_total') return countFaceContacts(activities);
-    if (key === 'face_contact_initial') {
-      return countFaceContacts(activities, '初回');
+  const sessionsFor = (predicate: (activity: Activity) => boolean) =>
+    new Set(activities.filter(predicate).map(sessionKey));
+
+  const pressCount = activities.filter(
+    (activity) => activity.type === 'interphone',
+  ).length;
+  const pressedHouseholds = sessionsFor(
+    (activity) => activity.type === 'interphone',
+  ).size;
+  const noResponsePresses = activities.filter(
+    (activity) =>
+      activity.type === 'interphone' &&
+      activity.interphoneAttemptOutcome === '無応答',
+  ).length;
+
+  const stageSessions = (type: ActivityType) =>
+    sessionsFor((activity) => activity.type === type);
+
+  const prerequisiteChain: Partial<Record<ActivityType, ActivityType[]>> = {
+    interphone_response: ['interphone'],
+    face_to_face_contact: ['interphone', 'interphone_response'],
+    appointment: ['interphone', 'interphone_response', 'face_to_face_contact'],
+    appointment_visit: [
+      'interphone',
+      'interphone_response',
+      'face_to_face_contact',
+      'appointment',
+    ],
+    presentation: [
+      'interphone',
+      'interphone_response',
+      'face_to_face_contact',
+      'appointment',
+      'appointment_visit',
+    ],
+    prospect: [
+      'interphone',
+      'interphone_response',
+      'face_to_face_contact',
+      'appointment',
+      'appointment_visit',
+      'presentation',
+    ],
+    sale: [
+      'interphone',
+      'interphone_response',
+      'face_to_face_contact',
+      'appointment',
+      'appointment_visit',
+      'presentation',
+    ],
+  };
+
+  const reachedSessions = (type: ActivityType) => {
+    const reached = stageSessions(type);
+    for (const prerequisite of prerequisiteChain[type] ?? []) {
+      const prerequisiteSessions = stageSessions(prerequisite);
+      for (const id of reached) {
+        if (!prerequisiteSessions.has(id)) reached.delete(id);
+      }
     }
-    return activities.filter((activity) => activity.type === key).length;
+    return reached;
+  };
+
+  const countOf = (key: AnalysisCountKey) => {
+    if (key === 'interphone') return pressedHouseholds;
+    if (key === 'face_contact_total') {
+      return reachedSessions('face_to_face_contact').size;
+    }
+    if (key === 'face_contact_initial') {
+      const initial = sessionsFor(
+        (activity) =>
+          activity.type === 'face_to_face_contact' &&
+          activity.faceContactKind === '初回',
+      );
+      const reached = reachedSessions('face_to_face_contact');
+      return [...initial].filter((id) => reached.has(id)).length;
+    }
+    return reachedSessions(key).size;
   };
 
   return (
@@ -104,7 +139,7 @@ export function AnalysisModal({ activities, onClose }: Props) {
             <h2 id="analysis-title" className="text-lg font-bold text-slate-800">
               営業分析
             </h2>
-            <p className="text-xs text-slate-500">現在保存されている活動から算出</p>
+            <p className="text-xs text-slate-500">世帯セッションごとの到達状況</p>
           </div>
           <button
             type="button"
@@ -118,9 +153,12 @@ export function AnalysisModal({ activities, onClose }: Props) {
 
         <div className="overflow-y-auto p-3">
           <section>
-            <h3 className="mb-1.5 px-1 text-xs font-bold text-slate-500">
-              営業ファネル
-            </h3>
+            <div className="mb-1.5 flex items-end justify-between px-1">
+              <h3 className="text-xs font-bold text-slate-500">営業ファネル</h3>
+              <p className="text-[10px] text-slate-400">
+                実押下 {pressCount}回・無応答 {noResponsePresses}回
+              </p>
+            </div>
             <div className="grid grid-cols-4 gap-1.5">
               {FUNNEL_STEPS.map((step) => (
                 <div
@@ -147,7 +185,6 @@ export function AnalysisModal({ activities, onClose }: Props) {
                 const numerator = countOf(metric.numerator);
                 const denominator = countOf(metric.denominator);
                 const rate = denominator > 0 ? (numerator / denominator) * 100 : null;
-
                 return (
                   <div
                     key={metric.label}
@@ -158,7 +195,7 @@ export function AnalysisModal({ activities, onClose }: Props) {
                     </p>
                     <div className="mt-1 flex items-end justify-between gap-2">
                       <p className="num text-2xl font-bold leading-none text-cyan-700">
-                        {rate === null ? '—' : `${rate.toFixed(1)}%`}
+                        {rate === null ? '—' : rate.toFixed(1) + '%'}
                       </p>
                       <p className="num whitespace-nowrap text-[10px] font-semibold text-slate-500">
                         {numerator} / {denominator}
@@ -174,7 +211,7 @@ export function AnalysisModal({ activities, onClose }: Props) {
           </section>
 
           <p className="mt-3 px-1 text-[10px] leading-relaxed text-slate-400">
-            各率はボタンの累計件数から算出します。活動ごとの関連付けは行わないため、入力順や期間によって100%を超える場合があります。
+            押下回数以外は同じ世帯セッション内で各段階を1回だけ集計します。自動補完された到達も含みます。
           </p>
         </div>
       </div>

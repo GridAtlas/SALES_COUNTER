@@ -60,6 +60,10 @@ export type RejectionReason =
   | 'やるなら連絡する' // 旧データ互換
   | 'その他';
 
+export type ActivityRecordSource = 'manual' | 'auto_backfill' | 'legacy';
+
+export type InterphoneAttemptOutcome = '無応答' | '応答';
+
 export type GpsStatus =
   | 'disabled'
   | 'pending'
@@ -89,11 +93,14 @@ export interface ActivityDetails {
   faceContactKind?: FaceContactKind;
   customerStatus?: CustomerStatus;
   interphoneResponseKind?: InterphoneResponseKind;
+  interphoneAttemptOutcome?: InterphoneAttemptOutcome;
   appointmentAcquisitionKind?: AppointmentAcquisitionKind;
   appointmentCategory?: AppointmentVisitKind;
   appointmentVisitKind?: AppointmentVisitKind;
   linkedAppointmentId?: string;
   linkedAppointmentLabel?: string;
+  linkedProspectId?: string;
+  linkedProspectLabel?: string;
   presentationEntryKind?: PresentationEntryKind;
   presentationLocation?: PresentationLocation;
   saleEntryKind?: SaleEntryKind;
@@ -105,6 +112,9 @@ export interface ActivityDetails {
   appointmentMemo?: string;
   prospectRating?: ProspectRating;
   prospectComment?: string;
+  sessionId?: string;
+  operationId?: string;
+  recordSource?: ActivityRecordSource;
   gpsStatus?: GpsStatus;
   gpsLatitude?: number;
   gpsLongitude?: number;

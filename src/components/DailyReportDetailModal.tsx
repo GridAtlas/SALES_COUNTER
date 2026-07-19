@@ -41,6 +41,13 @@ const activityDetails = (activity: Activity): string[] => {
     : undefined;
 
   return [
+    activity.interphoneAttemptOutcome
+      ? '結果：' + activity.interphoneAttemptOutcome
+      : undefined,
+    activity.linkedProspectLabel
+      ? '成約元：' + activity.linkedProspectLabel
+      : undefined,
+    activity.recordSource === 'auto_backfill' ? '自動補完' : undefined,
     activity.customerStatus,
     activity.interphoneResponseKind,
     faceContactKindOf(activity),
