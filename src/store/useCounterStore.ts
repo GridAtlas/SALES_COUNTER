@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { Activity, ActivityDetails, ActivityType } from '@/types';
+import { normalizeCarryoverActivities } from '@/lib/session';
 
 interface CounterState {
   activities: Activity[];
@@ -51,7 +52,7 @@ const TERMINAL_ACTIVITY_TYPES = new Set<ActivityType>([
 const migrateActivities = (activities: Activity[]) => {
   let currentSessionId: string | undefined;
 
-  return activities.map((source): Activity => {
+  const migrated = activities.map((source): Activity => {
     let activity = source;
     if (activity.type === 'first_contact') {
       activity = {
@@ -93,10 +94,41 @@ const migrateActivities = (activities: Activity[]) => {
     }
     return migrated;
   });
+
+  return normalizeCarryoverActivities(migrated);
 };
 
-const latestSessionId = (activities: Activity[]) =>
-  [...activities].reverse().find((activity) => activity.sessionId)?.sessionId;
+const isSameLocalDay = (left: number, right: number) => {
+  const a = new Date(left);
+  const b = new Date(right);
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+};
+
+const reusableSessionId = (
+  activities: Activity[],
+  candidate?: string,
+  now = Date.now(),
+) => {
+  if (!candidate) return undefined;
+  const sessionActivities = activities.filter(
+    (activity) => activity.sessionId === candidate,
+  );
+  const latest = sessionActivities[sessionActivities.length - 1];
+  if (
+    !latest ||
+    !isSameLocalDay(latest.timestamp, now) ||
+    sessionActivities.some((activity) =>
+      TERMINAL_ACTIVITY_TYPES.has(activity.type),
+    )
+  ) {
+    return undefined;
+  }
+  return candidate;
+};
 
 const recomputeInterphoneOutcomes = (
   activities: Activity[],
@@ -162,7 +194,18 @@ export const useCounterStore = create<CounterState>()(
           ),
         })),
 
-      setActiveSessionId: (activeSessionId) => set({ activeSessionId }),
+      setActiveSessionId: (activeSessionId) =>
+        set((state) => ({
+          activities:
+            activeSessionId === state.activeSessionId
+              ? state.activities
+              : recomputeInterphoneOutcomes(
+                  state.activities,
+                  state.activeSessionId,
+                  activeSessionId,
+                ),
+          activeSessionId,
+        })),
 
       undoLast: () =>
         set((state) => {
@@ -180,7 +223,7 @@ export const useCounterStore = create<CounterState>()(
             );
           const nextActiveSessionId = activeStillExists
             ? state.activeSessionId
-            : latestSessionId(remaining);
+            : undefined;
           return {
             activities: recomputeInterphoneOutcomes(
               remaining,
@@ -209,7 +252,7 @@ export const useCounterStore = create<CounterState>()(
     }),
     {
       name: 'sales-counter-store',
-      version: 3,
+      version: 4,
       migrate: (persistedState) => {
         const state = persistedState as Partial<CounterState>;
         const activities = migrateActivities(state.activities ?? []);
@@ -217,8 +260,10 @@ export const useCounterStore = create<CounterState>()(
           ...state,
           activities,
           periodStartedAt: state.periodStartedAt ?? 0,
-          activeSessionId:
-            state.activeSessionId ?? latestSessionId(activities),
+          activeSessionId: reusableSessionId(
+            activities,
+            state.activeSessionId,
+          ),
         } as CounterState;
       },
     },

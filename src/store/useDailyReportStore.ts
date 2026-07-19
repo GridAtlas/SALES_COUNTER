@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { Activity, DailyReport } from '@/types';
+import { normalizeCarryoverActivities } from '@/lib/session';
 
 interface DailyReportState {
   reports: DailyReport[];
@@ -49,7 +50,17 @@ export const useDailyReportStore = create<DailyReportState>()(
     }),
     {
       name: 'sales-counter-daily-reports',
-      version: 1,
+      version: 2,
+      migrate: (persistedState) => {
+        const state = persistedState as Partial<DailyReportState>;
+        return {
+          ...state,
+          reports: (state.reports ?? []).map((report) => ({
+            ...report,
+            activities: normalizeCarryoverActivities(report.activities),
+          })),
+        } as DailyReportState;
+      },
     },
   ),
 );

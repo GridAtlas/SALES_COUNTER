@@ -66,6 +66,17 @@ export type ActivityRecordSource =
   | 'historical_confirmation'
   | 'legacy';
 
+export type FunnelStage =
+  | 'interphone'
+  | 'interphone_response'
+  | 'face_to_face_contact'
+  | 'appointment'
+  | 'appointment_visit'
+  | 'presentation'
+  | 'sale';
+
+export type SessionOrigin = 'carryover';
+
 export type InterphoneAttemptOutcome = '無応答' | '応答';
 
 export type GpsStatus =
@@ -119,6 +130,8 @@ export interface ActivityDetails {
   sessionId?: string;
   operationId?: string;
   recordSource?: ActivityRecordSource;
+  sessionOrigin?: SessionOrigin;
+  priorReachedThrough?: Exclude<FunnelStage, 'sale'>;
   gpsStatus?: GpsStatus;
   gpsLatitude?: number;
   gpsLongitude?: number;

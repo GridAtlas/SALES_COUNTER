@@ -1,7 +1,9 @@
 'use client';
 
+import { useMemo, useState } from 'react';
 import { X } from 'lucide-react';
-import type { Activity, ActivityType } from '@/types';
+import { FUNNEL_STAGE_ORDER, reachedStageIndex } from '@/lib/session';
+import type { Activity, ActivityType, FunnelStage } from '@/types';
 
 interface Props {
   activities: Activity[];
@@ -13,6 +15,8 @@ type AnalysisCountKey =
   | 'face_contact_total'
   | 'face_contact_initial';
 
+type AnalysisPeriod = 'today' | '7days' | '30days' | 'all' | 'custom';
+
 interface AnalysisMetric {
   label: string;
   description: string;
@@ -20,10 +24,18 @@ interface AnalysisMetric {
   denominator: AnalysisCountKey;
 }
 
-const FUNNEL_STEPS: { key: AnalysisCountKey; shortLabel: string }[] = [
+const PERIOD_OPTIONS: { value: AnalysisPeriod; label: string }[] = [
+  { value: 'today', label: '今日' },
+  { value: '7days', label: '7日' },
+  { value: '30days', label: '30日' },
+  { value: 'all', label: '全期間' },
+  { value: 'custom', label: '指定' },
+];
+
+const FUNNEL_STEPS: { key: FunnelStage; shortLabel: string }[] = [
   { key: 'interphone', shortLabel: '押下' },
   { key: 'interphone_response', shortLabel: '応答' },
-  { key: 'face_contact_total', shortLabel: '対面接触' },
+  { key: 'face_to_face_contact', shortLabel: '対面接触' },
   { key: 'appointment', shortLabel: 'アポ取得' },
   { key: 'appointment_visit', shortLabel: 'アポ訪問' },
   { key: 'presentation', shortLabel: 'プレゼン' },
@@ -44,39 +56,165 @@ const METRICS: AnalysisMetric[] = [
 const sessionKey = (activity: Activity) =>
   activity.sessionId ?? 'legacy-' + activity.id;
 
-export function AnalysisModal({ activities, onClose }: Props) {
-  const sessionsFor = (predicate: (activity: Activity) => boolean) =>
-    new Set(activities.filter(predicate).map(sessionKey));
+const localDateInputValue = (timestamp: number) => {
+  const date = new Date(timestamp);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
 
-  const pressCount = activities.filter(
+const periodBounds = (
+  period: AnalysisPeriod,
+  now: number,
+  customStart: string,
+  customEnd: string,
+) => {
+  if (period === 'all') {
+    return { startAt: Number.NEGATIVE_INFINITY, endAt: now };
+  }
+  if (period === 'custom') {
+    const startAt = new Date(`${customStart}T00:00:00`).getTime();
+    const selectedEnd = new Date(`${customEnd}T23:59:59.999`).getTime();
+    if (!Number.isNaN(startAt) && !Number.isNaN(selectedEnd)) {
+      return {
+        startAt,
+        endAt: Math.min(selectedEnd, now),
+      };
+    }
+  }
+  const start = new Date(now);
+  start.setHours(0, 0, 0, 0);
+  if (period === '7days') start.setDate(start.getDate() - 6);
+  if (period === '30days') start.setDate(start.getDate() - 29);
+  return { startAt: start.getTime(), endAt: now };
+};
+
+export function AnalysisModal({ activities, onClose }: Props) {
+  const [period, setPeriod] = useState<AnalysisPeriod>('today');
+  const now = Date.now();
+  const today = localDateInputValue(now);
+  const [customStart, setCustomStart] = useState(today);
+  const [customEnd, setCustomEnd] = useState(today);
+  const { startAt, endAt } = periodBounds(
+    period,
+    now,
+    customStart,
+    customEnd,
+  );
+
+  const periodActivities = useMemo(
+    () =>
+      activities.filter(
+        (activity) =>
+          activity.timestamp >= startAt && activity.timestamp <= endAt,
+      ),
+    [activities, endAt, startAt],
+  );
+
+  const activeSessionIds = useMemo(
+    () =>
+      new Set(
+        periodActivities
+          .filter(
+            (activity) =>
+              activity.sessionId ||
+              FUNNEL_STAGE_ORDER.includes(activity.type as FunnelStage) ||
+              activity.type === 'prospect',
+          )
+          .map(sessionKey),
+      ),
+    [periodActivities],
+  );
+
+  const activitiesBySession = useMemo(() => {
+    const grouped = new Map<string, Activity[]>();
+    activities.forEach((activity) => {
+      const key = sessionKey(activity);
+      const group = grouped.get(key) ?? [];
+      group.push(activity);
+      grouped.set(key, group);
+    });
+    return grouped;
+  }, [activities]);
+
+  const furthestStageIndex = (id: string) =>
+    (activitiesBySession.get(id) ?? []).reduce((furthest, activity) => {
+      const actualIndex = FUNNEL_STAGE_ORDER.indexOf(
+        activity.type as FunnelStage,
+      );
+      const priorIndex = reachedStageIndex(activity.priorReachedThrough);
+      return Math.max(furthest, actualIndex, priorIndex);
+    }, -1);
+
+  const sessionsForKey = (key: AnalysisCountKey) => {
+    const matching = new Set<string>();
+    activeSessionIds.forEach((id) => {
+      const sessionActivities = activitiesBySession.get(id) ?? [];
+      if (key === 'face_contact_total') {
+        if (
+          furthestStageIndex(id) >=
+          FUNNEL_STAGE_ORDER.indexOf('face_to_face_contact')
+        ) {
+          matching.add(id);
+        }
+        return;
+      }
+      if (key === 'face_contact_initial') {
+        if (
+          sessionActivities.some(
+            (activity) =>
+              activity.type === 'face_to_face_contact' &&
+              activity.faceContactKind === '初回',
+          )
+        ) {
+          matching.add(id);
+        }
+        return;
+      }
+      const funnelIndex = FUNNEL_STAGE_ORDER.indexOf(key as FunnelStage);
+      if (funnelIndex >= 0) {
+        if (furthestStageIndex(id) >= funnelIndex) matching.add(id);
+        return;
+      }
+      if (sessionActivities.some((activity) => activity.type === key)) {
+        matching.add(id);
+      }
+    });
+    return matching;
+  };
+
+  const countOf = (key: AnalysisCountKey) => sessionsForKey(key).size;
+  const pressCount = periodActivities.filter(
     (activity) => activity.type === 'interphone',
   ).length;
-  const noResponsePresses = activities.filter(
+  const noResponsePresses = periodActivities.filter(
     (activity) =>
       activity.type === 'interphone' &&
       activity.interphoneAttemptOutcome === '無応答',
   ).length;
-
-  const sessionsForKey = (key: AnalysisCountKey) => {
-    if (key === 'face_contact_total') {
-      return sessionsFor(
-        (activity) => activity.type === 'face_to_face_contact',
-      );
-    }
-    if (key === 'face_contact_initial') {
-      return sessionsFor(
-        (activity) =>
-          activity.type === 'face_to_face_contact' &&
-          activity.faceContactKind === '初回',
-      );
-    }
-    return sessionsFor((activity) => activity.type === key);
-  };
-
-  const countOf = (key: AnalysisCountKey) => sessionsForKey(key).size;
-
-  const currentPresentationSessions = sessionsForKey('presentation');
-  const carryoverSales = [...sessionsForKey('sale')].filter((id) => !currentPresentationSessions.has(id)).length;
+  const periodPresentationSessions = new Set(
+    periodActivities
+      .filter((activity) => activity.type === 'presentation')
+      .map(sessionKey),
+  );
+  const periodSaleSessions = new Set(
+    periodActivities
+      .filter((activity) => activity.type === 'sale')
+      .map(sessionKey),
+  );
+  const carryoverSales = [...periodSaleSessions].filter(
+    (id) => !periodPresentationSessions.has(id),
+  ).length;
+  const carryoverSessions = [...activeSessionIds].filter((id) => {
+    const sessionActivities = activitiesBySession.get(id) ?? [];
+    return (
+      sessionActivities.some(
+        (activity) => activity.sessionOrigin === 'carryover',
+      ) ||
+      sessionActivities.some((activity) => activity.timestamp < startAt)
+    );
+  }).length;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-3">
@@ -104,14 +242,58 @@ export function AnalysisModal({ activities, onClose }: Props) {
         </header>
 
         <div className="overflow-y-auto p-3">
+          <div className="mb-3 grid grid-cols-5 gap-1 rounded-xl bg-slate-200 p-1">
+            {PERIOD_OPTIONS.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => setPeriod(option.value)}
+                className={`rounded-lg px-1 py-1.5 text-xs font-bold transition ${
+                  period === option.value
+                    ? 'bg-white text-cyan-700 shadow-sm'
+                    : 'text-slate-500'
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+
+          {period === 'custom' && (
+            <div className="mb-3 grid gap-2 rounded-xl border border-slate-200 bg-white p-2.5">
+              <label className="grid gap-1 text-xs font-bold text-slate-600">
+                開始日
+                <input
+                  type="date"
+                  value={customStart}
+                  max={customEnd}
+                  onChange={(event) => setCustomStart(event.target.value)}
+                  className="min-w-0 w-full max-w-full appearance-none rounded-lg border border-slate-300 bg-white px-3 py-2 text-base text-slate-800"
+                />
+              </label>
+              <label className="grid gap-1 text-xs font-bold text-slate-600">
+                終了日
+                <input
+                  type="date"
+                  value={customEnd}
+                  min={customStart}
+                  max={today}
+                  onChange={(event) => setCustomEnd(event.target.value)}
+                  className="min-w-0 w-full max-w-full appearance-none rounded-lg border border-slate-300 bg-white px-3 py-2 text-base text-slate-800"
+                />
+              </label>
+            </div>
+          )}
+
           <section>
             <div className="mb-1.5 flex items-end justify-between px-1">
               <h3 className="text-xs font-bold text-slate-500">営業ファネル</h3>
               <div className="text-right text-[10px] text-slate-400">
                 <p>実押下 {pressCount}回・無応答 {noResponsePresses}回</p>
-                {carryoverSales > 0 && (
-                  <p>前日以前からの持越し成約 {carryoverSales}件</p>
+                {carryoverSessions > 0 && (
+                  <p>過去活動からの継続 {carryoverSessions}世帯</p>
                 )}
+                {carryoverSales > 0 && <p>持越し成約 {carryoverSales}件</p>}
               </div>
             </div>
             <div className="grid grid-cols-4 gap-1.5">
@@ -137,17 +319,13 @@ export function AnalysisModal({ activities, onClose }: Props) {
             </h3>
             <div className="grid grid-cols-2 gap-2">
               {METRICS.map((metric) => {
-                const denominatorSessions = sessionsForKey(
-                  metric.denominator,
-                );
-                const numerator = [
-                  ...sessionsForKey(metric.numerator),
-                ].filter((id) => denominatorSessions.has(id)).length;
+                const denominatorSessions = sessionsForKey(metric.denominator);
+                const numerator = [...sessionsForKey(metric.numerator)].filter(
+                  (id) => denominatorSessions.has(id),
+                ).length;
                 const denominator = denominatorSessions.size;
                 const rate =
-                  denominator > 0
-                    ? (numerator / denominator) * 100
-                    : null;
+                  denominator > 0 ? (numerator / denominator) * 100 : null;
                 return (
                   <div
                     key={metric.label}
@@ -174,7 +352,7 @@ export function AnalysisModal({ activities, onClose }: Props) {
           </section>
 
           <p className="mt-3 px-1 text-[10px] leading-relaxed text-slate-400">
-            同じ世帯セッション内の各段階は1回だけ集計します。前日以前からの持越しは当日の率計算から除外します。
+            期間内に活動した世帯を対象に、以前の到達確認も含めて各段階を1世帯1回で集計します。実押下回数は別表示です。
           </p>
         </div>
       </div>

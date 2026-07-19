@@ -31,6 +31,11 @@ import {
   SALE_ENTRY_KINDS,
 } from '@/lib/constants';
 import { requestCurrentGps } from '@/lib/geolocation';
+import {
+  laterStage,
+  PREREQUISITE_STAGE_ORDER,
+  reachedStageIndex,
+} from '@/lib/session';
 import { useCounterStore } from '@/store/useCounterStore';
 import { useDailyReportStore } from '@/store/useDailyReportStore';
 import { useSettingsStore } from '@/store/useSettingsStore';
@@ -45,6 +50,7 @@ import type {
   AppointmentVisitKind,
   CustomerStatus,
   FaceContactKind,
+  FunnelStage,
   GpsDetails,
   InterphoneResponseKind,
   PresentationEntryKind,
@@ -52,6 +58,7 @@ import type {
   ProspectRating,
   RejectionReason,
   SaleEntryKind,
+  SessionOrigin,
 } from '@/types';
 
 const AUTO_EVENT_GAP_MS = 10_000;
@@ -113,13 +120,7 @@ type PlannedActivity = {
   timestamp?: number;
 };
 
-type HistoricalStage =
-  | 'interphone'
-  | 'interphone_response'
-  | 'face_to_face_contact'
-  | 'appointment'
-  | 'appointment_visit'
-  | 'presentation';
+type HistoricalStage = Exclude<FunnelStage, 'sale'>;
 
 type FlowTask =
   | { kind: 'ensure_interphone'; historyChecked?: boolean }
@@ -205,14 +206,7 @@ const HISTORICAL_STAGE_LABELS: Record<HistoricalStage, string> = {
   presentation: 'プレゼン',
 };
 
-const HISTORICAL_STAGE_ORDER: HistoricalStage[] = [
-  'interphone',
-  'interphone_response',
-  'face_to_face_contact',
-  'appointment',
-  'appointment_visit',
-  'presentation',
-];
+const HISTORICAL_STAGE_ORDER = PREREQUISITE_STAGE_ORDER;
 
 interface FunnelFlow {
   sessionId: string;
@@ -220,6 +214,8 @@ interface FunnelFlow {
   closePressId?: string;
   finalTarget: FunnelTarget;
   anchorTimestamp: number;
+  sessionOrigin?: SessionOrigin;
+  priorReachedThrough?: HistoricalStage;
   planned: PlannedActivity[];
   tasks: FlowTask[];
   modal: FlowModal | null;
@@ -270,6 +266,16 @@ export default function HomePage() {
   );
   const gpsEnabled = useSettingsStore((state) => state.gpsEnabled);
   const setGpsEnabled = useSettingsStore((state) => state.setGpsEnabled);
+
+  useEffect(() => {
+    if (!hydrated || !activeSessionId) return;
+    const latest = [...activities]
+      .reverse()
+      .find((activity) => activity.sessionId === activeSessionId);
+    if (!latest || localDateKey(latest.timestamp) !== localDateKey(Date.now())) {
+      setActiveSessionId(undefined);
+    }
+  }, [activeSessionId, activities, hydrated, setActiveSessionId]);
 
   const counterActivities = useMemo(() => {
     if (!hydrated) return [];
@@ -395,9 +401,35 @@ export default function HomePage() {
   const sessionActivitiesOf = (flow: FunnelFlow) =>
     activities.filter((activity) => activity.sessionId === flow.sessionId);
 
-  const sessionHasType = (flow: FunnelFlow, type: ActivityType) =>
-    sessionActivitiesOf(flow).some((activity) => activity.type === type) ||
-    flow.planned.some((activity) => activity.type === type);
+  const priorReachedThroughOf = (
+    flow: FunnelFlow,
+  ): HistoricalStage | undefined => {
+    const storedStages = sessionActivitiesOf(flow).map(
+      (activity) => activity.priorReachedThrough,
+    );
+    const plannedStages = flow.planned.map(
+      (activity) => activity.details.priorReachedThrough,
+    );
+    return [...storedStages, ...plannedStages, flow.priorReachedThrough].reduce<
+      HistoricalStage | undefined
+    >((latest, stage) => laterStage(latest, stage), undefined);
+  };
+
+  const sessionHasType = (flow: FunnelFlow, type: ActivityType) => {
+    if (
+      sessionActivitiesOf(flow).some((activity) => activity.type === type) ||
+      flow.planned.some((activity) => activity.type === type)
+    ) {
+      return true;
+    }
+    const stageIndex = HISTORICAL_STAGE_ORDER.indexOf(
+      type as HistoricalStage,
+    );
+    return (
+      stageIndex >= 0 &&
+      reachedStageIndex(priorReachedThroughOf(flow)) >= stageIndex
+    );
+  };
 
   const latestSessionRecord = (flow: FunnelFlow, type: ActivityType) =>
     [...sessionActivitiesOf(flow), ...flow.planned]
@@ -499,6 +531,10 @@ export default function HomePage() {
       }
     }
 
+    const priorReachedThrough = priorReachedThroughOf(flow);
+    const sessionOrigin =
+      flow.sessionOrigin ??
+      (priorReachedThrough ? 'carryover' : undefined);
     let currentIndex = 0;
     flow.planned.forEach((planned) => {
       const timestamp =
@@ -514,6 +550,8 @@ export default function HomePage() {
           sessionId: flow.sessionId,
           operationId: flow.operationId,
           recordSource: planned.recordSource,
+          sessionOrigin,
+          priorReachedThrough,
         },
         plannedGpsPromise,
         timestamp,
@@ -862,9 +900,17 @@ export default function HomePage() {
     type: FunnelTarget,
     now: number,
   ): { selectedSessionId: string; closePressId?: string } => {
-    const activeEvents = activeSessionId
+    const storedActiveEvents = activeSessionId
       ? activities.filter((activity) => activity.sessionId === activeSessionId)
       : [];
+    const latestActiveEvent = storedActiveEvents[storedActiveEvents.length - 1];
+    const reusableActiveSessionId =
+      activeSessionId &&
+      latestActiveEvent &&
+      localDateKey(latestActiveEvent.timestamp) === localDateKey(now)
+        ? activeSessionId
+        : undefined;
+    const activeEvents = reusableActiveSessionId ? storedActiveEvents : [];
 
     if (type === 'interphone') {
       const lastPress = [...activeEvents]
@@ -880,7 +926,9 @@ export default function HomePage() {
         now - lastPress.timestamp <= SAME_HOUSEHOLD_PRESS_WINDOW_MS;
       return {
         selectedSessionId:
-          reuse && activeSessionId ? activeSessionId : sessionId(),
+          reuse && reusableActiveSessionId
+            ? reusableActiveSessionId
+            : sessionId(),
         closePressId: awaitingResponse ? lastPress?.id : undefined,
       };
     }
@@ -897,8 +945,8 @@ export default function HomePage() {
     );
     return {
       selectedSessionId:
-        activeSessionId && !alreadyReached && !terminal
-          ? activeSessionId
+        reusableActiveSessionId && !alreadyReached && !terminal
+          ? reusableActiveSessionId
           : sessionId(),
     };
   };
@@ -906,6 +954,9 @@ export default function HomePage() {
   const startFunnelFlow = (type: FunnelTarget) => {
     const now = Date.now();
     const selection = selectSessionForTarget(type, now);
+    if (activeSessionId && selection.selectedSessionId !== activeSessionId) {
+      setActiveSessionId(undefined);
+    }
     pendingGpsRef.current = createGpsPromise();
     advanceFunnelFlow({
       sessionId: selection.selectedSessionId,
@@ -943,29 +994,17 @@ export default function HomePage() {
       return;
     }
 
-    const stageIndex = HISTORICAL_STAGE_ORDER.indexOf(stage);
-    const missingStages = HISTORICAL_STAGE_ORDER.slice(
-      0,
-      stageIndex + 1,
-    ).filter((type) => !sessionHasType(funnelFlow, type));
-    const startOfToday = new Date(funnelFlow.anchorTimestamp);
-    startOfToday.setHours(0, 0, 0, 0);
-    const firstTimestamp =
-      startOfToday.getTime() - AUTO_EVENT_GAP_MS * missingStages.length;
-    const historicalActivities: PlannedActivity[] = missingStages.map(
-      (type, index) => ({
-        id: flowId(),
-        type,
-        details: {},
-        recordSource: 'historical_confirmation',
-        timestamp: firstTimestamp + AUTO_EVENT_GAP_MS * index,
-      }),
-    );
-
-    continueFunnelFlow(
-      [...funnelFlow.planned, ...historicalActivities],
-      [resumeTask, ...funnelFlow.tasks],
-    );
+    const priorReachedThrough = laterStage(
+      priorReachedThroughOf(funnelFlow),
+      stage,
+    ) as HistoricalStage;
+    advanceFunnelFlow({
+      ...funnelFlow,
+      sessionOrigin: 'carryover',
+      priorReachedThrough,
+      tasks: [resumeTask, ...funnelFlow.tasks],
+      modal: null,
+    });
   };
 
   const handleTap = (type: ActivityType) => {
@@ -1307,7 +1346,14 @@ export default function HomePage() {
 
   const handleConfirmActivityEnd = () => {
     if (todaysActivities.length === 0) return;
-    saveDailyReport(reportDate, todaysActivities, Date.now());
+    const endedAt = Date.now();
+    setActiveSessionId(undefined);
+    const finalizedTodayActivities = useCounterStore
+      .getState()
+      .activities.filter(
+        (activity) => localDateKey(activity.timestamp) === reportDate,
+      );
+    saveDailyReport(reportDate, finalizedTodayActivities, endedAt);
     setShowActivityEnd(false);
     setActiveView('reports');
   };
@@ -1501,7 +1547,7 @@ export default function HomePage() {
 
       {showAnalysis && (
         <AnalysisModal
-          activities={counterActivities}
+          activities={activities}
           onClose={() => setShowAnalysis(false)}
         />
       )}
