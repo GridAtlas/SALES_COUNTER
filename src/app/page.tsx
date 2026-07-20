@@ -1528,11 +1528,13 @@ export default function HomePage() {
         <DailyReportList reports={dailyReports} hydrated={hydrated} />
       )}
 
-      <BottomBar
-        disableUndo={total === 0}
-        onUndo={undoLast}
-        onReset={reset}
-      />
+      {activeView === 'counter' && (
+        <BottomBar
+          disableUndo={total === 0}
+          onUndo={undoLast}
+          onReset={reset}
+        />
+      )}
 
       {funnelFlow?.modal?.kind === 'stage_timing' && (
         <ChoiceModal
