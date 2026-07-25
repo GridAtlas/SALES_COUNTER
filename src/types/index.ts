@@ -12,7 +12,7 @@ export type ActivityType =
   | 'face_to_face_contact' // 対面接触
   | 'first_contact' // 新規接触（旧データ互換）
   | 'revisit' // 再訪接触（旧データ互換）
-  | 'rejection_close' // 拒否クローズ
+  | 'rejection_close' // 対面後拒否（旧キー名を維持）
   | 'appointment' // アポ取得
   | 'appointment_visit' // アポ訪問
   | 'pre_presentation_rejection' // プレゼン前拒否
@@ -45,7 +45,10 @@ export type AppointmentAcquisitionKind = '対面取得' | 'その他取得';
 
 export type PresentationEntryKind = '即プレゼン' | 'アポ訪問';
 
-export type SaleEntryKind = '新規プレゼン' | '保留／見込からの成約';
+export type SaleEntryKind =
+  | '新規プレゼン'
+  | 'アポリストからの成約'
+  | '保留／見込からの成約';
 
 export type ProspectRating = 1 | 2 | 3 | 4 | 5;
 

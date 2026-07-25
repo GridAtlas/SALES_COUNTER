@@ -6,13 +6,26 @@ import { PROSPECT_RATINGS } from '@/lib/constants';
 import type { ProspectRating } from '@/types';
 
 interface Props {
+  title?: string;
+  submitLabel?: string;
+  initialRating?: ProspectRating;
+  initialComment?: string;
   onSave: (rating: ProspectRating, comment?: string) => void;
   onCancel: () => void;
 }
 
-export function ProspectModal({ onSave, onCancel }: Props) {
-  const [rating, setRating] = useState<ProspectRating | null>(null);
-  const [comment, setComment] = useState('');
+export function ProspectModal({
+  title = '保留／見込',
+  submitLabel = '保留／見込を記録',
+  initialRating,
+  initialComment = '',
+  onSave,
+  onCancel,
+}: Props) {
+  const [rating, setRating] = useState<ProspectRating | null>(
+    initialRating ?? null,
+  );
+  const [comment, setComment] = useState(initialComment);
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -33,7 +46,7 @@ export function ProspectModal({ onSave, onCancel }: Props) {
           id="prospect-title"
           className="text-center text-lg font-bold text-stone-800"
         >
-          保留／見込
+          {title}
         </h2>
         <p className="mt-1 text-center text-xs text-stone-500">
           見込度を星1〜5で選択してください
@@ -83,7 +96,7 @@ export function ProspectModal({ onSave, onCancel }: Props) {
           disabled={!rating}
           className="tap-target mt-3 w-full rounded-xl bg-amber-500 px-3 py-2 text-sm font-bold text-white active:bg-amber-600 disabled:opacity-40"
         >
-          保留／見込を記録
+          {submitLabel}
         </button>
         <button
           type="button"

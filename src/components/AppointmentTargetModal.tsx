@@ -6,7 +6,9 @@ import type { Activity } from '@/types';
 interface Props {
   appointments: Activity[];
   onSelect: (appointment: Activity) => void;
-  onCreate: () => void;
+  onCreate?: () => void;
+  title?: string;
+  description?: string;
   fallbackLabel?: string;
   onCancel: () => void;
 }
@@ -25,6 +27,8 @@ export function AppointmentTargetModal({
   appointments,
   onSelect,
   onCreate,
+  title = '対象アポを選択',
+  description = '登録済みのアポから訪問先を選択してください',
   fallbackLabel = '対象アポがない・新規登録',
   onCancel,
 }: Props) {
@@ -38,10 +42,10 @@ export function AppointmentTargetModal({
       >
         <header className="border-b border-stone-100 px-4 py-3 text-center">
           <h2 id="appointment-target-title" className="text-lg font-bold text-stone-800">
-            対象アポを選択
+            {title}
           </h2>
           <p className="mt-0.5 text-xs text-stone-500">
-            登録済みのアポから訪問先を選択してください
+            {description}
           </p>
         </header>
 
@@ -83,18 +87,23 @@ export function AppointmentTargetModal({
         </div>
 
         <div className="border-t border-stone-100 p-3">
-          <button
-            type="button"
-            onClick={onCreate}
-            className="tap-target flex w-full items-center justify-center gap-1.5 rounded-xl bg-amber-500 px-3 py-2 text-sm font-bold text-white active:bg-amber-600"
-          >
-            <MapPinHouse size={17} aria-hidden />
-            {fallbackLabel}
-          </button>
+          {onCreate && (
+            <button
+              type="button"
+              onClick={onCreate}
+              className="tap-target flex w-full items-center justify-center gap-1.5 rounded-xl bg-amber-500 px-3 py-2 text-sm font-bold text-white active:bg-amber-600"
+            >
+              <MapPinHouse size={17} aria-hidden />
+              {fallbackLabel}
+            </button>
+          )}
           <button
             type="button"
             onClick={onCancel}
-            className="tap-target mt-2 w-full rounded-xl bg-stone-100 px-3 py-2 text-sm font-semibold text-stone-600 active:bg-stone-200"
+            className={[
+              'tap-target w-full rounded-xl bg-stone-100 px-3 py-2 text-sm font-semibold text-stone-600 active:bg-stone-200',
+              onCreate ? 'mt-2' : '',
+            ].join(' ')}
           >
             キャンセル
           </button>

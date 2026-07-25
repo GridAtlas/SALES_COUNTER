@@ -26,7 +26,7 @@ export const ACTIVITIES: ActivityDef[] = [
   { type: 'interphone', label: 'インターホン押下', color: 'slate', icon: 'DoorClosed' },
   { type: 'interphone_response', label: 'インターホン応答', color: 'zinc', icon: 'PhoneCall' },
   { type: 'face_to_face_contact', label: '対面接触', color: 'sky', icon: 'UserPlus' },
-  { type: 'rejection_close', label: '拒否クローズ', color: 'red', icon: 'CircleX' },
+  { type: 'rejection_close', label: '対面後拒否', color: 'red', icon: 'CircleX' },
   { type: 'appointment', label: 'アポ取得', color: 'amber', icon: 'CalendarCheck' },
   { type: 'appointment_visit', label: 'アポ訪問', color: 'rose', icon: 'MapPinHouse' },
   { type: 'pre_presentation_rejection', label: 'プレゼン前拒否', color: 'red', icon: 'CircleX' },
@@ -80,8 +80,9 @@ export const PRESENTATION_ENTRY_KINDS: PresentationEntryKind[] = [
 ];
 
 export const SALE_ENTRY_KINDS: SaleEntryKind[] = [
-  '新規プレゼン',
+  'アポリストからの成約',
   '保留／見込からの成約',
+  '新規プレゼン',
 ];
 
 export const PROSPECT_RATINGS: ProspectRating[] = [1, 2, 3, 4, 5];

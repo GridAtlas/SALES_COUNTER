@@ -99,6 +99,11 @@ const sessionId = () =>
   '-' +
   Math.random().toString(36).slice(2, 8);
 
+type RejectionActivityType =
+  | 'rejection_close'
+  | 'pre_presentation_rejection'
+  | 'post_presentation_rejection';
+
 type FunnelTarget =
   | 'interphone'
   | 'interphone_response'
@@ -107,7 +112,8 @@ type FunnelTarget =
   | 'appointment_visit'
   | 'presentation'
   | 'prospect'
-  | 'sale';
+  | 'sale'
+  | RejectionActivityType;
 
 type PlannedActivity = {
   id: string;
@@ -160,14 +166,14 @@ type FlowTask =
   | { kind: 'ensure_instant_visit' }
   | { kind: 'presentation_location'; entryKind: PresentationEntryKind }
   | { kind: 'prospect'; historyChecked?: boolean }
-  | {
-      kind: 'sale';
-      historyChecked?: boolean;
-      forceEntryChoice?: boolean;
-    }
+  | { kind: 'sale' }
+
+  | { kind: 'rejection'; type: RejectionActivityType }
   | {
       kind: 'append_sale';
       entryKind?: SaleEntryKind;
+      linkedAppointmentId?: string;
+      linkedAppointmentLabel?: string;
       linkedProspectId?: string;
       linkedProspectLabel?: string;
     };
@@ -199,7 +205,9 @@ type FlowModal =
     }
   | { kind: 'prospect' }
   | { kind: 'sale_entry' }
+  | { kind: 'sale_appointment_target'; appointments: Activity[] }
   | { kind: 'prospect_target'; prospects: Activity[] }
+  | { kind: 'rejection_reason'; type: RejectionActivityType }
   | {
       kind: 'stage_timing';
       stage: HistoricalStage;
@@ -262,6 +270,18 @@ const tasksForTarget = (type: FunnelTarget): FlowTask[] => {
   if (type === 'appointment_visit') return [{ kind: 'appointment_visit' }];
   if (type === 'presentation') return [{ kind: 'presentation' }];
   if (type === 'prospect') return [{ kind: 'prospect' }];
+  if (type === 'rejection_close' || type === 'pre_presentation_rejection') {
+    return [
+      { kind: 'ensure_face_contact' },
+      { kind: 'rejection', type },
+    ];
+  }
+  if (type === 'post_presentation_rejection') {
+    return [
+      { kind: 'presentation' },
+      { kind: 'rejection', type },
+    ];
+  }
   return [{ kind: 'sale' }];
 };
 
@@ -271,8 +291,6 @@ export default function HomePage() {
   const [funnelFlow, setFunnelFlow] = useState<FunnelFlow | null>(null);
   const [showAnalysis, setShowAnalysis] = useState(false);
   const [showActivityEnd, setShowActivityEnd] = useState(false);
-  const [pendingRejectionType, setPendingRejectionType] =
-    useState<ActivityType | null>(null);
   const pendingGpsRef = useRef<Promise<GpsDetails> | null>(null);
 
   useEffect(() => setHydrated(true), []);
@@ -305,6 +323,7 @@ export default function HomePage() {
     }
   }, [activeSessionId, activities, hydrated, setActiveSessionId]);
 
+  const reportDate = localDateKey(Date.now());
   const counterActivities = useMemo(() => {
     if (!hydrated) return [];
     const currentOperationIds = new Set(
@@ -327,12 +346,13 @@ export default function HomePage() {
   const countOf = (type: string) =>
     counterActivities.filter((activity) => activity.type === type).length;
   const total = counterActivities.length;
-  const reportDate = localDateKey(Date.now());
   const todaysActivities = useMemo(
     () =>
       hydrated
         ? activities.filter(
-            (activity) => localDateKey(activity.timestamp) === reportDate,
+            (activity) =>
+              activity.recordSource !== 'historical_confirmation' &&
+              localDateKey(activity.timestamp) === reportDate,
           )
         : [],
     [activities, hydrated, reportDate],
@@ -358,6 +378,23 @@ export default function HomePage() {
             })
         : [],
     [activities, hydrated],
+  );
+
+  const terminalSessionIds = useMemo(
+    () =>
+      new Set(
+        activities
+          .filter(
+            (activity) =>
+              activity.sessionId &&
+              (activity.type === 'sale' ||
+                activity.type === 'rejection_close' ||
+                activity.type === 'pre_presentation_rejection' ||
+                activity.type === 'post_presentation_rejection'),
+          )
+          .map((activity) => activity.sessionId!),
+      ),
+    [activities],
   );
 
   const soldSessionIds = useMemo(
@@ -406,15 +443,6 @@ export default function HomePage() {
       requestedId,
     );
     void gpsPromise.then((gpsDetails) => updateActivity(id, gpsDetails));
-  };
-
-  const recordPendingActivity = (
-    type: ActivityType,
-    details: ActivityDetails = {},
-  ) => {
-    const gpsPromise = pendingGpsRef.current ?? createGpsPromise();
-    pendingGpsRef.current = null;
-    recordActivity(type, details, gpsPromise);
   };
 
   const cancelPendingGps = () => {
@@ -474,9 +502,6 @@ export default function HomePage() {
       .reverse()
       .find((activity) => activity.type === type);
 
-  const latestSessionActivity = (flow: FunnelFlow) =>
-    flow.planned[flow.planned.length - 1] ??
-    sessionActivitiesOf(flow)[sessionActivitiesOf(flow).length - 1];
 
   const visitableAppointmentsOf = (flow: FunnelFlow): Activity[] => {
     const visitedSessionIds = new Set(
@@ -646,7 +671,12 @@ export default function HomePage() {
       );
     });
 
-    setActiveSessionId(flow.finalTarget === 'sale' ? undefined : flow.sessionId);
+    const terminalTarget =
+      flow.finalTarget === 'sale' ||
+      flow.finalTarget === 'rejection_close' ||
+      flow.finalTarget === 'pre_presentation_rejection' ||
+      flow.finalTarget === 'post_presentation_rejection';
+    setActiveSessionId(terminalTarget ? undefined : flow.sessionId);
     setFunnelFlow(null);
     if (flow.finalTarget === 'appointment') setActiveView('appointments');
     if (flow.finalTarget === 'prospect') setActiveView('prospects');
@@ -931,26 +961,9 @@ export default function HomePage() {
 
       if (task.kind === 'sale') {
         if (sessionHasType(next, 'sale')) continue;
-        if (
-          latestSessionActivity(next)?.type === 'presentation' &&
-          !task.forceEntryChoice
-        ) {
+        if (sessionHasType(next, 'presentation')) {
+
           next.tasks.unshift({ kind: 'append_sale' });
-        } else if (
-          !task.historyChecked &&
-          canAskHistorical(next, 'presentation')
-        ) {
-          next.modal = stageTimingModal(
-              next,
-              'presentation',
-              {
-              kind: 'sale',
-              historyChecked: true,
-              forceEntryChoice: true,
-            },
-            );
-          setFunnelFlow(next);
-          return;
         } else {
           next.modal = { kind: 'sale_entry' };
           setFunnelFlow(next);
@@ -959,11 +972,19 @@ export default function HomePage() {
         continue;
       }
 
+      if (task.kind === 'rejection') {
+        next.modal = { kind: 'rejection_reason', type: task.type };
+        setFunnelFlow(next);
+        return;
+      }
+
       next.planned.push({
         id: flowId(),
         type: 'sale',
         details: {
           saleEntryKind: task.entryKind,
+          linkedAppointmentId: task.linkedAppointmentId,
+          linkedAppointmentLabel: task.linkedAppointmentLabel,
           linkedProspectId: task.linkedProspectId,
           linkedProspectLabel: task.linkedProspectLabel,
         },
@@ -1140,22 +1161,16 @@ export default function HomePage() {
       type === 'appointment_visit' ||
       type === 'presentation' ||
       type === 'prospect' ||
-      type === 'sale'
+      type === 'sale' ||
+      type === 'rejection_close' ||
+      type === 'pre_presentation_rejection' ||
+      type === 'post_presentation_rejection'
     ) {
       startFunnelFlow(type);
       return;
     }
 
     const gpsPromise = createGpsPromise();
-    if (
-      type === 'rejection_close' ||
-      type === 'pre_presentation_rejection' ||
-      type === 'post_presentation_rejection'
-    ) {
-      pendingGpsRef.current = gpsPromise;
-      setPendingRejectionType(type);
-      return;
-    }
     recordActivity(type, { operationId: flowId(), recordSource: 'manual' }, gpsPromise);
   };
 
@@ -1365,6 +1380,26 @@ export default function HomePage() {
 
   const handleSaleEntrySelect = (saleEntryKind: SaleEntryKind) => {
     if (!funnelFlow) return;
+    if (saleEntryKind === 'アポリストからの成約') {
+      const soldAppointmentIds = new Set(
+        activities
+          .filter((activity) => activity.type === 'sale')
+          .map((activity) => activity.linkedAppointmentId)
+          .filter((id): id is string => Boolean(id)),
+      );
+      setFunnelFlow({
+        ...funnelFlow,
+        modal: {
+          kind: 'sale_appointment_target',
+          appointments: appointments.filter(
+            (appointment) =>
+              !soldAppointmentIds.has(appointment.id) &&
+              (!appointment.sessionId || !soldSessionIds.has(appointment.sessionId)),
+          ),
+        },
+      });
+      return;
+    }
     if (saleEntryKind === '保留／見込からの成約') {
       setFunnelFlow({
         ...funnelFlow,
@@ -1379,15 +1414,73 @@ export default function HomePage() {
     ]);
   };
 
+  const handleSaleAppointmentTargetSelect = (appointment: Activity) => {
+    if (!funnelFlow || funnelFlow.modal?.kind !== 'sale_appointment_target') {
+      return;
+    }
+    const sourceSessionClosed = Boolean(
+      appointment.sessionId && terminalSessionIds.has(appointment.sessionId),
+    );
+    const targetSessionId = sourceSessionClosed
+      ? sessionId()
+      : appointment.sessionId ?? funnelFlow.sessionId;
+    const appointmentLabel = appointmentDisplayLabel(appointment);
+    advanceFunnelFlow({
+      ...funnelFlow,
+      sessionId: targetSessionId,
+      sessionOrigin: sourceSessionClosed
+        ? 'carryover'
+        : funnelFlow.sessionOrigin,
+      priorReachedThrough: sourceSessionClosed
+        ? (laterStage(
+            priorReachedThroughOf(funnelFlow),
+            'appointment',
+          ) as HistoricalStage)
+        : funnelFlow.priorReachedThrough,
+      planned: [],
+      tasks: [
+        {
+          kind: 'append_appointment_visit',
+          visitKind: appointmentCategoryOf(appointment),
+          appointmentId: appointment.id,
+          appointmentLabel,
+        },
+        { kind: 'presentation' },
+        {
+          kind: 'append_sale',
+          entryKind: 'アポリストからの成約',
+          linkedAppointmentId: appointment.id,
+          linkedAppointmentLabel: appointmentLabel,
+        },
+        ...funnelFlow.tasks,
+      ],
+      modal: null,
+    });
+  };
+
   const handleProspectTargetSelect = (prospect: Activity) => {
     if (!funnelFlow || funnelFlow.modal?.kind !== 'prospect_target') return;
-    const targetSessionId = prospect.sessionId ?? funnelFlow.sessionId;
+    const sourceSessionClosed = Boolean(
+      prospect.sessionId && terminalSessionIds.has(prospect.sessionId),
+    );
+    const targetSessionId = sourceSessionClosed
+      ? sessionId()
+      : prospect.sessionId ?? funnelFlow.sessionId;
     const label =
       prospect.prospectComment?.trim() ||
       '見込度 ' + (prospect.prospectRating ?? 0) + ' / 5';
     advanceFunnelFlow({
       ...funnelFlow,
       sessionId: targetSessionId,
+      sessionOrigin: sourceSessionClosed
+        ? 'carryover'
+        : funnelFlow.sessionOrigin,
+      priorReachedThrough: sourceSessionClosed
+        ? (laterStage(
+            priorReachedThroughOf(funnelFlow),
+            'presentation',
+          ) as HistoricalStage)
+        : funnelFlow.priorReachedThrough,
       planned: [],
       tasks: [
         { kind: 'presentation' },
@@ -1415,16 +1508,17 @@ export default function HomePage() {
     rejectionReason: RejectionReason,
     rejectionReasonDetail?: string,
   ) => {
-    if (!pendingRejectionType) return;
-    recordPendingActivity(pendingRejectionType, {
-      rejectionReason,
-      rejectionReasonDetail,
-      sessionId: activeSessionId ?? sessionId(),
-      operationId: flowId(),
-      recordSource: 'manual',
-    });
-    setActiveSessionId(undefined);
-    setPendingRejectionType(null);
+    if (!funnelFlow || funnelFlow.modal?.kind !== 'rejection_reason') return;
+    const rejectionType = funnelFlow.modal.type;
+    continueFunnelFlow([
+      ...funnelFlow.planned,
+      {
+        id: flowId(),
+        type: rejectionType,
+        details: { rejectionReason, rejectionReasonDetail },
+        recordSource: recordSourceFor(funnelFlow, rejectionType),
+      },
+    ]);
   };
 
   const handleProspectSave = (
@@ -1450,7 +1544,9 @@ export default function HomePage() {
     const finalizedTodayActivities = useCounterStore
       .getState()
       .activities.filter(
-        (activity) => localDateKey(activity.timestamp) === reportDate,
+        (activity) =>
+          activity.recordSource !== 'historical_confirmation' &&
+          localDateKey(activity.timestamp) === reportDate,
       );
     saveDailyReport(reportDate, finalizedTodayActivities, endedAt);
     setShowActivityEnd(false);
@@ -1523,7 +1619,12 @@ export default function HomePage() {
           onCancelAppointment={removeActivity}
         />
       ) : activeView === 'prospects' ? (
-        <ProspectList prospects={prospects} hydrated={hydrated} />
+        <ProspectList
+          prospects={prospects}
+          hydrated={hydrated}
+          onUpdate={(id, details) => updateActivity(id, details)}
+          onDelete={removeActivity}
+        />
       ) : (
         <DailyReportList reports={dailyReports} hydrated={hydrated} />
       )}
@@ -1612,6 +1713,16 @@ export default function HomePage() {
         />
       )}
 
+      {funnelFlow?.modal?.kind === 'sale_appointment_target' && (
+        <AppointmentTargetModal
+          appointments={funnelFlow.modal.appointments}
+          title="成約したアポを選択"
+          description="アポリストから今回の成約元を選んでください"
+          onSelect={handleSaleAppointmentTargetSelect}
+          onCancel={cancelFunnelFlow}
+        />
+      )}
+
       {funnelFlow?.modal?.kind === 'prospect_target' && (
         <ProspectTargetModal
           prospects={funnelFlow.modal.prospects}
@@ -1662,14 +1773,13 @@ export default function HomePage() {
         />
       )}
 
-      {pendingRejectionType && (
+      {funnelFlow?.modal?.kind === 'rejection_reason' && (
         <RejectionReasonModal
-          activityLabel={getActivityDef(pendingRejectionType)?.label ?? ''}
+          activityLabel={
+            getActivityDef(funnelFlow.modal.type)?.label ?? ''
+          }
           onSelect={handleRejectionReasonSelect}
-          onCancel={() => {
-            cancelPendingGps();
-            setPendingRejectionType(null);
-          }}
+          onCancel={cancelFunnelFlow}
         />
       )}
     </>
