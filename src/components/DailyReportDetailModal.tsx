@@ -69,6 +69,7 @@ const activityDetails = (activity: Activity): string[] => {
     activity.prospectComment
       ? `コメント：${activity.prospectComment}`
       : undefined,
+    activity.commentText,
   ].filter((detail): detail is string => Boolean(detail));
 };
 

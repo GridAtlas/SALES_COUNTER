@@ -17,6 +17,7 @@ import {
   Presentation,
   Star,
   ShoppingBag,
+  MessageSquarePlus,
   type LucideIcon,
 } from 'lucide-react';
 import type { ActivityDef } from '@/types';
@@ -40,6 +41,7 @@ const ICONS: Record<string, LucideIcon> = {
   Star,
   Presentation,
   ShoppingBag,
+  MessageSquarePlus,
 };
 
 interface Props {

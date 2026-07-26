@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Check, Copy } from 'lucide-react';
+import { ArrowLeft, Check, Copy, Trash2 } from 'lucide-react';
 import { useCounterStore } from '@/store/useCounterStore';
 import { getActivityDef } from '@/lib/constants';
 import { faceContactKindOf, isFaceContactActivity } from '@/lib/contact';
@@ -56,6 +56,7 @@ const activityDetailLabels = (activity: Activity): string[] => {
     appointmentMemo,
     prospectRating,
     prospectComment,
+    activity.commentText,
   ].filter((detail): detail is string => Boolean(detail));
 };
 /** yyyy-mm-dd 形式のローカル日付文字列。 */
@@ -82,6 +83,7 @@ export default function HistoryPage() {
   useEffect(() => setHydrated(true), []);
 
   const activities = useCounterStore((s) => s.activities);
+  const removeActivity = useCounterStore((s) => s.removeActivity);
 
   // 日付別にグループ化、新しい日→古い日、日内は新しい順。
   const grouped = useMemo(() => {
@@ -134,6 +136,17 @@ export default function HistoryPage() {
       setCopyStatus('error');
     }
     window.setTimeout(() => setCopyStatus('idle'), 2000);
+  };
+
+  const handleDelete = (activity: Activity) => {
+    const label = getActivityDef(activity.type)?.label ?? activity.type;
+    if (
+      window.confirm(
+        `${timeStr(activity.timestamp)} の「${label}」を履歴から削除しますか？`,
+      )
+    ) {
+      removeActivity(activity.id);
+    }
   };
 
   return (
@@ -203,6 +216,14 @@ export default function HistoryPage() {
                       <span className="num text-xs text-stone-400">
                         {timeStr(a.timestamp)}
                       </span>
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(a)}
+                        className="tap-target -my-1 grid shrink-0 place-items-center rounded-lg text-rose-400 active:bg-rose-50 active:text-rose-600"
+                        aria-label={`${timeStr(a.timestamp)} のログ行を削除`}
+                      >
+                        <Trash2 size={17} />
+                      </button>
                     </div>
                   );
                 })}

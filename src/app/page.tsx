@@ -11,6 +11,7 @@ import { AppointmentList } from '@/components/AppointmentList';
 import { AppointmentModal } from '@/components/AppointmentModal';
 import { AppointmentTargetModal } from '@/components/AppointmentTargetModal';
 import { ChoiceModal } from '@/components/ChoiceModal';
+import { CommentModal } from '@/components/CommentModal';
 import { CustomerStatusModal } from '@/components/CustomerStatusModal';
 import { DailyReportList } from '@/components/DailyReportList';
 import { DailyReportButton } from '@/components/DailyReportButton';
@@ -19,6 +20,7 @@ import { ProspectList } from '@/components/ProspectList';
 import { ProspectModal } from '@/components/ProspectModal';
 import { ProspectTargetModal } from '@/components/ProspectTargetModal';
 import { RejectionReasonModal } from '@/components/RejectionReasonModal';
+import { StageRecordTargetModal } from '@/components/StageRecordTargetModal';
 import { ViewTabs, type HomeView } from '@/components/ViewTabs';
 import { BottomBar } from '@/components/BottomBar';
 import { Header } from '@/components/Header';
@@ -168,6 +170,7 @@ type FlowTask =
   | { kind: 'presentation_location'; entryKind: PresentationEntryKind }
   | { kind: 'prospect'; historyChecked?: boolean }
   | { kind: 'sale' }
+  | { kind: 'continue_stage_timing'; timing: StageTimingContext }
 
   | { kind: 'rejection'; type: RejectionActivityType }
   | {
@@ -218,6 +221,12 @@ type FlowModal =
       kind: 'stage_timing';
       stage: HistoricalStage;
       timing: StageTimingContext;
+    }
+  | {
+      kind: 'stage_record_target';
+      stage: HistoricalStage;
+      timing: StageTimingContext;
+      records: Activity[];
     };
 
 const HISTORICAL_STAGE_LABELS: Record<HistoricalStage, string> = {
@@ -338,6 +347,7 @@ export default function HomePage() {
   const [funnelFlow, setFunnelFlow] = useState<FunnelFlow | null>(null);
   const [showAnalysis, setShowAnalysis] = useState(false);
   const [showActivityEnd, setShowActivityEnd] = useState(false);
+  const [showComment, setShowComment] = useState(false);
   const pendingGpsRef = useRef<Promise<GpsDetails> | null>(null);
 
   useEffect(() => setHydrated(true), []);
@@ -603,6 +613,16 @@ export default function HomePage() {
     return !hasEarlierStageToday;
   };
 
+  const todayStageRecords = (stage: HistoricalStage) =>
+    activities
+      .filter(
+        (activity) =>
+          activity.type === stage &&
+          activity.recordSource !== 'historical_confirmation' &&
+          localDateKey(activity.timestamp) === localDateKey(Date.now()),
+      )
+      .sort((left, right) => right.timestamp - left.timestamp);
+
   const stageTimingModal = (
     flow: FunnelFlow,
     targetStage: HistoricalStage,
@@ -739,6 +759,26 @@ export default function HomePage() {
 
     while (next.tasks.length > 0) {
       const task = next.tasks.shift()!;
+
+      if (task.kind === 'continue_stage_timing') {
+        const targetIndex = HISTORICAL_STAGE_ORDER.indexOf(
+          task.timing.targetStage,
+        );
+        const missingStage = HISTORICAL_STAGE_ORDER
+          .slice(0, targetIndex + 1)
+          .find((stage) => !sessionHasType(next, stage));
+        if (missingStage) {
+          next.modal = {
+            kind: 'stage_timing',
+            stage: missingStage,
+            timing: task.timing,
+          };
+          setFunnelFlow(next);
+          return;
+        }
+        next.tasks.unshift(task.timing.resumeTask);
+        continue;
+      }
 
       if (task.kind === 'ensure_interphone') {
         if (!sessionHasType(next, 'interphone')) {
@@ -1185,11 +1225,15 @@ export default function HomePage() {
   const completePriorStageCapture = (
     prior: PriorDetailContext,
     details: PriorStageDetails,
+    origin: SessionOrigin = 'carryover',
   ) => {
     if (!funnelFlow) return;
     const updatedFlow: FunnelFlow = {
       ...funnelFlow,
-      sessionOrigin: 'carryover',
+      sessionOrigin:
+        funnelFlow.sessionOrigin === 'carryover' || origin === 'carryover'
+          ? 'carryover'
+          : origin,
       priorReachedThrough: laterStage(
         priorReachedThroughOf(funnelFlow),
         prior.stage,
@@ -1200,42 +1244,44 @@ export default function HomePage() {
       },
       modal: null,
     };
-    const currentIndex = HISTORICAL_STAGE_ORDER.indexOf(prior.stage);
-    const targetIndex = HISTORICAL_STAGE_ORDER.indexOf(
-      prior.timing.targetStage,
-    );
-    if (currentIndex < targetIndex) {
-      setFunnelFlow({
-        ...updatedFlow,
-        modal: {
-          kind: 'stage_timing',
-          stage: HISTORICAL_STAGE_ORDER[currentIndex + 1],
-          timing: prior.timing,
-        },
-      });
-      return;
-    }
     advanceFunnelFlow({
       ...updatedFlow,
-      tasks: [prior.timing.resumeTask, ...funnelFlow.tasks],
+      tasks: [
+        { kind: 'continue_stage_timing', timing: prior.timing },
+        ...funnelFlow.tasks,
+      ],
     });
   };
 
+  type StageTimingAnswer =
+    | '今日・未登録'
+    | '今日・登録済み'
+    | '今日より前';
+
   const handleStageTimingSelect = (
-    answer: '今日' | '今日より前',
+    answer: StageTimingAnswer,
   ) => {
     if (!funnelFlow || funnelFlow.modal?.kind !== 'stage_timing') return;
     const { stage, timing } = funnelFlow.modal;
-    if (answer === '今日') {
-      const startIndex = HISTORICAL_STAGE_ORDER.indexOf(stage);
-      const targetIndex = HISTORICAL_STAGE_ORDER.indexOf(timing.targetStage);
-      const todayTasks = HISTORICAL_STAGE_ORDER
-        .slice(startIndex, targetIndex + 1)
-        .map(taskForHistoricalStage);
+    if (answer === '今日・未登録') {
       advanceFunnelFlow({
         ...funnelFlow,
-        tasks: [...todayTasks, timing.resumeTask, ...funnelFlow.tasks],
+        tasks: [
+          taskForHistoricalStage(stage),
+          { kind: 'continue_stage_timing', timing },
+          ...funnelFlow.tasks,
+        ],
         modal: null,
+      });
+      return;
+    }
+
+    if (answer === '今日・登録済み') {
+      const records = todayStageRecords(stage);
+      if (records.length === 0) return;
+      setFunnelFlow({
+        ...funnelFlow,
+        modal: { kind: 'stage_record_target', stage, timing, records },
       });
       return;
     }
@@ -1257,6 +1303,37 @@ export default function HomePage() {
             ? { kind: 'appointment_source', prior }
             : { kind: 'presentation_location', prior };
     setFunnelFlow({ ...funnelFlow, modal });
+  };
+
+  const handleStageRecordTargetSelect = (activity: Activity) => {
+    if (!funnelFlow || funnelFlow.modal?.kind !== 'stage_record_target') return;
+    const { stage, timing } = funnelFlow.modal;
+    if (!activity.sessionId) {
+      completePriorStageCapture(
+        { stage, timing },
+        {},
+        'existing_today',
+      );
+      return;
+    }
+    advanceFunnelFlow({
+      ...funnelFlow,
+      sessionId: activity.sessionId,
+      tasks: [
+        { kind: 'continue_stage_timing', timing },
+        ...funnelFlow.tasks,
+      ],
+      modal: null,
+    });
+  };
+
+  const returnToStageTiming = () => {
+    if (!funnelFlow || funnelFlow.modal?.kind !== 'stage_record_target') return;
+    const { stage, timing } = funnelFlow.modal;
+    setFunnelFlow({
+      ...funnelFlow,
+      modal: { kind: 'stage_timing', stage, timing },
+    });
   };
 
   const handleSameCustomerSelect = (answer: 'はい' | 'いいえ') => {
@@ -1284,6 +1361,10 @@ export default function HomePage() {
   };
 
   const handleTap = (type: ActivityType) => {
+    if (type === 'comment') {
+      setShowComment(true);
+      return;
+    }
     if (
       type === 'interphone' ||
       type === 'interphone_response' ||
@@ -1303,6 +1384,15 @@ export default function HomePage() {
 
     const gpsPromise = createGpsPromise();
     recordActivity(type, { operationId: flowId(), recordSource: 'manual' }, gpsPromise);
+  };
+
+  const handleCommentSave = (commentText: string) => {
+    recordActivity('comment', {
+      commentText,
+      operationId: flowId(),
+      recordSource: 'manual',
+    });
+    setShowComment(false);
   };
 
   const handleCustomerStatusSelect = (customerStatus: CustomerStatus) => {
@@ -1806,11 +1896,32 @@ export default function HomePage() {
           description={
             'この世帯で一番最初に「' +
             HISTORICAL_STAGE_LABELS[funnelFlow.modal.stage] +
-            '」したのはいつですか？'
+            '」したのはいつですか？ 今日の場合は登録状況も選んでください。'
           }
-          options={['今日', '今日より前'] as const}
+          options={
+            todayStageRecords(funnelFlow.modal.stage).length > 0
+              ? (['今日・未登録', '今日・登録済み', '今日より前'] as const)
+              : (['今日・未登録', '今日より前'] as const)
+          }
           onSelect={handleStageTimingSelect}
           onCancel={cancelFunnelFlow}
+        />
+      )}
+
+      {funnelFlow?.modal?.kind === 'stage_record_target' && (
+        <StageRecordTargetModal
+          stageLabel={HISTORICAL_STAGE_LABELS[funnelFlow.modal.stage]}
+          records={funnelFlow.modal.records}
+          onSelect={handleStageRecordTargetSelect}
+          onBack={returnToStageTiming}
+          onCancel={cancelFunnelFlow}
+        />
+      )}
+
+      {showComment && (
+        <CommentModal
+          onSave={handleCommentSave}
+          onCancel={() => setShowComment(false)}
         />
       )}
 

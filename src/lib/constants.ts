@@ -13,7 +13,7 @@ import type {
 } from '@/types';
 
 /**
- * 訪問営業の移動・休憩と実施ファネル 17 項目。
+ * 訪問営業の移動・休憩、実施ファネル、コメントの 18 項目。
  * 上から下へ、順序は保存されるので UI ではこの順で並べる。
  */
 export const ACTIVITIES: ActivityDef[] = [
@@ -34,6 +34,7 @@ export const ACTIVITIES: ActivityDef[] = [
   { type: 'post_presentation_rejection', label: 'プレゼン後拒否', color: 'red', icon: 'CircleX' },
   { type: 'prospect', label: '保留／見込', color: 'amber', icon: 'Star' },
   { type: 'sale', label: 'セールス', color: 'emerald', icon: 'ShoppingBag' },
+  { type: 'comment', label: 'コメント', color: 'indigo', icon: 'MessageSquarePlus' },
 ];
 
 const LEGACY_ACTIVITIES: ActivityDef[] = [

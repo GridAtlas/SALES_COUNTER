@@ -19,6 +19,7 @@ export type ActivityType =
   | 'presentation' // プレゼン
   | 'post_presentation_rejection' // プレゼン後拒否
   | 'sale' // セールス
+  | 'comment' // 時刻付きコメント
   | 'prospect' // 保留／見込
   | 'break_end'; // 休憩終了（旧データ互換）
 
@@ -83,7 +84,7 @@ export type FunnelStage =
   | 'presentation'
   | 'sale';
 
-export type SessionOrigin = 'carryover';
+export type SessionOrigin = 'carryover' | 'existing_today';
 
 export type InterphoneAttemptOutcome = '無応答' | '応答';
 
@@ -145,6 +146,7 @@ export interface ActivityDetails {
   appointmentMemo?: string;
   prospectRating?: ProspectRating;
   prospectComment?: string;
+  commentText?: string;
   sessionId?: string;
   operationId?: string;
   recordSource?: ActivityRecordSource;
