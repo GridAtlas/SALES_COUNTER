@@ -50,6 +50,11 @@ export type SaleEntryKind =
   | 'アポリストからの成約'
   | '保留／見込からの成約';
 
+export type SaleSourceChoice =
+  | 'アポリストからの成約'
+  | '保留／見込からの成約'
+  | 'リスト成約ではない';
+
 export type ProspectRating = 1 | 2 | 3 | 4 | 5;
 
 export type PresentationLocation = '玄関外' | '玄関内' | '宅内';

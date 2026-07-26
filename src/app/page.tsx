@@ -27,7 +27,7 @@ import {
   APPOINTMENT_ACQUISITION_KINDS,
   getActivityDef,
   PRESENTATION_ENTRY_KINDS,
-  SALE_ENTRY_KINDS,
+  SALE_SOURCE_CHOICES,
 } from '@/lib/constants';
 import { requestCurrentGps } from '@/lib/geolocation';
 import {
@@ -56,6 +56,7 @@ import type {
   ProspectRating,
   RejectionReason,
   SaleEntryKind,
+  SaleSourceChoice,
   SessionOrigin,
 } from '@/types';
 
@@ -179,6 +180,11 @@ type FlowTask =
     };
 
 type FlowModal =
+  | {
+      kind: 'same_customer';
+      previousType: ActivityType;
+      fallbackSessionId: string;
+    }
   | { kind: 'customer_status'; prior?: PriorDetailContext }
   | { kind: 'face_contact'; prior?: PriorDetailContext }
   | {
@@ -224,6 +230,21 @@ const HISTORICAL_STAGE_LABELS: Record<HistoricalStage, string> = {
 };
 
 const HISTORICAL_STAGE_ORDER = PREREQUISITE_STAGE_ORDER;
+
+const REQUIRED_PRIOR_STAGE: Partial<
+  Record<FunnelTarget, HistoricalStage>
+> = {
+  interphone_response: 'interphone',
+  face_to_face_contact: 'interphone_response',
+  rejection_close: 'face_to_face_contact',
+  appointment: 'face_to_face_contact',
+  appointment_visit: 'appointment',
+  pre_presentation_rejection: 'face_to_face_contact',
+  presentation: 'appointment_visit',
+  post_presentation_rejection: 'presentation',
+  prospect: 'presentation',
+  sale: 'presentation',
+};
 
 const taskForHistoricalStage = (stage: HistoricalStage): FlowTask => {
   if (stage === 'interphone') return { kind: 'interphone' };
@@ -283,6 +304,32 @@ const tasksForTarget = (type: FunnelTarget): FlowTask[] => {
     ];
   }
   return [{ kind: 'sale' }];
+};
+
+const tasksForSameCustomerGap = (type: FunnelTarget): FlowTask[] => {
+  if (type === 'appointment') {
+    return [
+      { kind: 'ensure_face_contact' },
+      { kind: 'appointment', appointmentId: flowId() },
+    ];
+  }
+  if (type === 'appointment_visit') {
+    return [
+      { kind: 'ensure_face_contact' },
+      { kind: 'appointment', appointmentId: flowId() },
+      { kind: 'appointment_visit' },
+    ];
+  }
+  if (type === 'presentation') {
+    return [
+      { kind: 'ensure_face_contact' },
+      { kind: 'presentation' },
+    ];
+  }
+  if (type === 'sale') {
+    return [{ kind: 'presentation' }, { kind: 'sale' }];
+  }
+  return tasksForTarget(type);
 };
 
 export default function HomePage() {
@@ -1043,6 +1090,49 @@ export default function HomePage() {
     };
   };
 
+  const sameCustomerGapPrevious = (
+    type: FunnelTarget,
+    selectedSessionId: string,
+  ): Activity | undefined => {
+    if (!activeSessionId || selectedSessionId !== activeSessionId) {
+      return undefined;
+    }
+    const requiredPriorStage = REQUIRED_PRIOR_STAGE[type];
+    if (!requiredPriorStage) return undefined;
+
+    const sessionActivities = activities.filter(
+      (activity) => activity.sessionId === selectedSessionId,
+    );
+    const reachedThrough = sessionActivities.reduce<HistoricalStage | undefined>(
+      (latest, activity) => {
+        const activityStage = HISTORICAL_STAGE_ORDER.includes(
+          activity.type as HistoricalStage,
+        )
+          ? (activity.type as HistoricalStage)
+          : undefined;
+        return laterStage(
+          laterStage(latest, activityStage),
+          activity.priorReachedThrough,
+        );
+      },
+      undefined,
+    );
+    if (
+      reachedStageIndex(reachedThrough) >=
+      reachedStageIndex(requiredPriorStage)
+    ) {
+      return undefined;
+    }
+
+    return [...sessionActivities]
+      .reverse()
+      .find(
+        (activity) =>
+          activity.recordSource === 'manual' ||
+          activity.recordSource === 'legacy',
+      );
+  };
+
   const startFunnelFlow = (type: FunnelTarget) => {
     const now = Date.now();
     const selection = selectSessionForTarget(type, now);
@@ -1050,7 +1140,7 @@ export default function HomePage() {
       setActiveSessionId(undefined);
     }
     pendingGpsRef.current = createGpsPromise();
-    advanceFunnelFlow({
+    const flow: FunnelFlow = {
       sessionId: selection.selectedSessionId,
       operationId: flowId(),
       closePressId: selection.closePressId,
@@ -1059,7 +1149,24 @@ export default function HomePage() {
       planned: [],
       tasks: tasksForTarget(type),
       modal: null,
-    });
+    };
+    const previous = sameCustomerGapPrevious(
+      type,
+      selection.selectedSessionId,
+    );
+    if (previous) {
+      setFunnelFlow({
+        ...flow,
+        tasks: tasksForSameCustomerGap(type),
+        modal: {
+          kind: 'same_customer',
+          previousType: previous.type,
+          fallbackSessionId: sessionId(),
+        },
+      });
+      return;
+    }
+    advanceFunnelFlow(flow);
   };
 
   const continueFunnelFlow = (
@@ -1150,6 +1257,30 @@ export default function HomePage() {
             ? { kind: 'appointment_source', prior }
             : { kind: 'presentation_location', prior };
     setFunnelFlow({ ...funnelFlow, modal });
+  };
+
+  const handleSameCustomerSelect = (answer: 'はい' | 'いいえ') => {
+    if (!funnelFlow || funnelFlow.modal?.kind !== 'same_customer') return;
+    if (answer === 'はい') {
+      advanceFunnelFlow({
+        ...funnelFlow,
+        modal: null,
+      });
+      return;
+    }
+
+    setActiveSessionId(undefined);
+    advanceFunnelFlow({
+      ...funnelFlow,
+      sessionId: funnelFlow.modal.fallbackSessionId,
+      closePressId: undefined,
+      sessionOrigin: undefined,
+      priorReachedThrough: undefined,
+      priorStageDetails: undefined,
+      planned: [],
+      tasks: tasksForTarget(funnelFlow.finalTarget),
+      modal: null,
+    });
   };
 
   const handleTap = (type: ActivityType) => {
@@ -1378,9 +1509,9 @@ export default function HomePage() {
     ]);
   };
 
-  const handleSaleEntrySelect = (saleEntryKind: SaleEntryKind) => {
+  const handleSaleEntrySelect = (saleSource: SaleSourceChoice) => {
     if (!funnelFlow) return;
-    if (saleEntryKind === 'アポリストからの成約') {
+    if (saleSource === 'アポリストからの成約') {
       const soldAppointmentIds = new Set(
         activities
           .filter((activity) => activity.type === 'sale')
@@ -1400,18 +1531,32 @@ export default function HomePage() {
       });
       return;
     }
-    if (saleEntryKind === '保留／見込からの成約') {
+    if (saleSource === '保留／見込からの成約') {
       setFunnelFlow({
         ...funnelFlow,
         modal: { kind: 'prospect_target', prospects },
       });
       return;
     }
-    continueFunnelFlow(funnelFlow.planned, [
-      { kind: 'presentation', historyChecked: true },
-      { kind: 'append_sale', entryKind: saleEntryKind },
-      ...funnelFlow.tasks,
-    ]);
+    const freshFlow: FunnelFlow = {
+      ...funnelFlow,
+      sessionId: sessionId(),
+      closePressId: undefined,
+      sessionOrigin: undefined,
+      priorReachedThrough: undefined,
+      priorStageDetails: undefined,
+      planned: [],
+      tasks: [],
+      modal: null,
+    };
+    setFunnelFlow({
+      ...freshFlow,
+      modal: stageTimingModal(
+        freshFlow,
+        'presentation',
+        { kind: 'append_sale', entryKind: '新規プレゼン' },
+      ),
+    });
   };
 
   const handleSaleAppointmentTargetSelect = (appointment: Activity) => {
@@ -1637,6 +1782,24 @@ export default function HomePage() {
         />
       )}
 
+      {funnelFlow?.modal?.kind === 'same_customer' && (
+        <ChoiceModal
+          title="同じお客さまですか？"
+          description={
+            '直前の「' +
+            (getActivityDef(funnelFlow.modal.previousType)?.label ??
+              funnelFlow.modal.previousType) +
+            '」と同じお客さまへの「' +
+            (getActivityDef(funnelFlow.finalTarget)?.label ??
+              funnelFlow.finalTarget) +
+            '」ですか？'
+          }
+          options={['はい', 'いいえ'] as const}
+          onSelect={handleSameCustomerSelect}
+          onCancel={cancelFunnelFlow}
+        />
+      )}
+
       {funnelFlow?.modal?.kind === 'stage_timing' && (
         <ChoiceModal
           title="開始時点の確認"
@@ -1706,8 +1869,8 @@ export default function HomePage() {
       {funnelFlow?.modal?.kind === 'sale_entry' && (
         <ChoiceModal
           title="セールス前確認"
-          description="今回の成約経路を選択してください"
-          options={SALE_ENTRY_KINDS}
+          description="登録済みリストからの成約ですか？"
+          options={SALE_SOURCE_CHOICES}
           onSelect={handleSaleEntrySelect}
           onCancel={cancelFunnelFlow}
         />

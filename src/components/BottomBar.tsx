@@ -17,10 +17,10 @@ export function BottomBar({ disableUndo, onUndo, onReset }: Props) {
         onClick={onUndo}
         disabled={disableUndo}
         className="tap-target flex flex-col items-center gap-1 rounded-xl py-2 text-stone-600 active:bg-stone-100 disabled:opacity-40"
-        aria-label="ひとつ戻す"
+        aria-label="直前の入力を取り消して履歴から削除"
       >
         <Undo2 size={20} />
-        <span className="text-xs font-semibold">戻す</span>
+        <span className="text-xs font-semibold">入力を戻す</span>
       </button>
 
       <Link

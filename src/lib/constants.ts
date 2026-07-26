@@ -9,7 +9,7 @@ import type {
   PresentationLocation,
   ProspectRating,
   RejectionReason,
-  SaleEntryKind,
+  SaleSourceChoice,
 } from '@/types';
 
 /**
@@ -79,10 +79,10 @@ export const PRESENTATION_ENTRY_KINDS: PresentationEntryKind[] = [
   'アポ訪問',
 ];
 
-export const SALE_ENTRY_KINDS: SaleEntryKind[] = [
+export const SALE_SOURCE_CHOICES: SaleSourceChoice[] = [
   'アポリストからの成約',
   '保留／見込からの成約',
-  '新規プレゼン',
+  'リスト成約ではない',
 ];
 
 export const PROSPECT_RATINGS: ProspectRating[] = [1, 2, 3, 4, 5];
