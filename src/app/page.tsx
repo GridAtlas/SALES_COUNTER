@@ -367,6 +367,9 @@ export default function HomePage() {
   const saveDailyReport = useDailyReportStore(
     (state) => state.saveDailyReport,
   );
+  const autoSaveDailyReport = useDailyReportStore(
+    (state) => state.autoSaveDailyReport,
+  );
   const gpsEnabled = useSettingsStore((state) => state.gpsEnabled);
   const setGpsEnabled = useSettingsStore((state) => state.setGpsEnabled);
 
@@ -392,6 +395,7 @@ export default function HomePage() {
     return activities.filter(
       (activity) =>
         activity.recordSource !== 'historical_confirmation' &&
+        localDateKey(activity.timestamp) === reportDate &&
         (activity.timestamp > periodStartedAt ||
           Boolean(
             activity.recordSource === 'auto_backfill' &&
@@ -399,7 +403,7 @@ export default function HomePage() {
               currentOperationIds.has(activity.operationId),
           )),
     );
-  }, [activities, hydrated, periodStartedAt]);
+  }, [activities, hydrated, periodStartedAt, reportDate]);
   const countOf = (type: string) =>
     counterActivities.filter((activity) => activity.type === type).length;
   const total = counterActivities.length;
@@ -417,6 +421,23 @@ export default function HomePage() {
   const existingTodayReport = hydrated
     ? dailyReports.find((report) => report.date === reportDate)
     : undefined;
+
+  useEffect(() => {
+    if (!hydrated) return;
+
+    const activitiesByDate = new Map<string, Activity[]>();
+    for (const activity of activities) {
+      if (activity.recordSource === 'historical_confirmation') continue;
+      const date = localDateKey(activity.timestamp);
+      const dailyActivities = activitiesByDate.get(date) ?? [];
+      dailyActivities.push(activity);
+      activitiesByDate.set(date, dailyActivities);
+    }
+
+    for (const [date, dailyActivities] of activitiesByDate) {
+      autoSaveDailyReport(date, dailyActivities);
+    }
+  }, [activities, autoSaveDailyReport, hydrated]);
 
   const appointments = useMemo(
     () =>

@@ -100,7 +100,9 @@ export function DailyReportDetailModal({ report, onClose }: Props) {
               {report.date} 日報
             </h2>
             <p className="text-xs text-slate-500">
-              営業終了 {timeString(report.endedAt)}
+              {report.isFinalized && report.endedAt
+                ? `営業終了 ${timeString(report.endedAt)}`
+                : `自動保存 ${timeString(report.savedAt)}`}
             </p>
           </div>
           <button
@@ -163,12 +165,14 @@ export function DailyReportDetailModal({ report, onClose }: Props) {
                   </div>
                 );
               })}
-              <div className="flex gap-2 bg-rose-50 px-3 py-2">
-                <span className="num w-[62px] shrink-0 text-xs text-rose-500">
-                  {timeString(report.endedAt)}
-                </span>
-                <p className="text-sm font-bold text-rose-700">活動終了</p>
-              </div>
+              {report.isFinalized && report.endedAt && (
+                <div className="flex gap-2 bg-rose-50 px-3 py-2">
+                  <span className="num w-[62px] shrink-0 text-xs text-rose-500">
+                    {timeString(report.endedAt)}
+                  </span>
+                  <p className="text-sm font-bold text-rose-700">活動終了</p>
+                </div>
+              )}
             </div>
           )}
         </div>

@@ -169,9 +169,11 @@ export interface Activity extends ActivityDetails {
 export interface DailyReport {
   id: string;
   date: string;
-  endedAt: number;
+  /** 活動終了を明示した時刻。未終了の日報は自動保存中の下書き。 */
+  endedAt?: number;
   savedAt: number;
   activities: Activity[];
+  isFinalized?: boolean;
 }
 
 export interface ActivityDef {

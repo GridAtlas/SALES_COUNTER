@@ -61,7 +61,10 @@ export function DailyReportList({ reports, hydrated }: Props) {
                   {dateLabel(report.date)}
                 </span>
                 <span className="mt-0.5 block text-xs text-slate-500">
-                  {report.activities.length}件・活動終了 {timeLabel(report.endedAt)}
+                  {report.activities.length}件・
+                  {report.isFinalized && report.endedAt
+                    ? `活動終了 ${timeLabel(report.endedAt)}`
+                    : `自動保存 ${timeLabel(report.savedAt)}`}
                 </span>
               </span>
               <ChevronRight size={18} className="shrink-0 text-slate-400" />
