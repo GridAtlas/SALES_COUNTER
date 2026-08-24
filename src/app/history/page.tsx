@@ -8,6 +8,13 @@ import { getActivityDef } from '@/lib/constants';
 import { faceContactKindOf, isFaceContactActivity } from '@/lib/contact';
 import type { Activity } from '@/types';
 
+const japanDateFormatter = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'Asia/Tokyo',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
+
 const activityDetailLabels = (activity: Activity): string[] => {
   const rejectionReason = activity.rejectionReason
     ? activity.rejectionReason === 'その他' && activity.rejectionReasonDetail
@@ -59,13 +66,12 @@ const activityDetailLabels = (activity: Activity): string[] => {
     activity.commentText,
   ].filter((detail): detail is string => Boolean(detail));
 };
-/** yyyy-mm-dd 形式のローカル日付文字列。 */
+/** yyyy-mm-dd 形式の日本時間の日付文字列。 */
 const dateKey = (ts: number) => {
-  const d = new Date(ts);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
+  const parts = japanDateFormatter.formatToParts(new Date(ts));
+  const valueOf = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value ?? '';
+  return `${valueOf('year')}-${valueOf('month')}-${valueOf('day')}`;
 };
 
 /** HH:mm:ss 形式のローカル時刻。 */

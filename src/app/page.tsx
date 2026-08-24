@@ -63,13 +63,19 @@ import type {
 } from '@/types';
 
 const AUTO_EVENT_GAP_MS = 10_000;
+const JAPAN_TIME_ZONE = 'Asia/Tokyo';
+const japanDateFormatter = new Intl.DateTimeFormat('en-US', {
+  timeZone: JAPAN_TIME_ZONE,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
 
 const localDateKey = (timestamp: number) => {
-  const date = new Date(timestamp);
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  const parts = japanDateFormatter.formatToParts(new Date(timestamp));
+  const valueOf = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value ?? '';
+  return `${valueOf('year')}-${valueOf('month')}-${valueOf('day')}`;
 };
 
 const appointmentSortKey = (activity: Activity) =>
