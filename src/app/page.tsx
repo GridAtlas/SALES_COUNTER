@@ -343,6 +343,7 @@ const tasksForSameCustomerGap = (type: FunnelTarget): FlowTask[] => {
 
 export default function HomePage() {
   const [hydrated, setHydrated] = useState(false);
+  const [reportDate, setReportDate] = useState(() => localDateKey(Date.now()));
   const [activeView, setActiveView] = useState<HomeView>('counter');
   const [funnelFlow, setFunnelFlow] = useState<FunnelFlow | null>(null);
   const [showAnalysis, setShowAnalysis] = useState(false);
@@ -350,7 +351,30 @@ export default function HomePage() {
   const [showComment, setShowComment] = useState(false);
   const pendingGpsRef = useRef<Promise<GpsDetails> | null>(null);
 
-  useEffect(() => setHydrated(true), []);
+  useEffect(() => {
+    const stores = [
+      useCounterStore,
+      useDailyReportStore,
+      useSettingsStore,
+    ];
+    const finishHydration = () => {
+      if (stores.every((store) => store.persist.hasHydrated())) {
+        setHydrated(true);
+      }
+    };
+    const unsubscribe = stores.map((store) =>
+      store.persist.onFinishHydration(finishHydration),
+    );
+
+    finishHydration();
+    return () => unsubscribe.forEach((stop) => stop());
+  }, []);
+
+  useEffect(() => {
+    const refreshReportDate = () => setReportDate(localDateKey(Date.now()));
+    const timerId = window.setInterval(refreshReportDate, 60_000);
+    return () => window.clearInterval(timerId);
+  }, []);
 
   const activities = useCounterStore((state) => state.activities);
   const periodStartedAt = useCounterStore((state) => state.periodStartedAt);
@@ -383,7 +407,6 @@ export default function HomePage() {
     }
   }, [activeSessionId, activities, hydrated, setActiveSessionId]);
 
-  const reportDate = localDateKey(Date.now());
   const counterActivities = useMemo(() => {
     if (!hydrated) return [];
     const currentOperationIds = new Set(
