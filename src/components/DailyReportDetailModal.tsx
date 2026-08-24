@@ -174,14 +174,27 @@ export function DailyReportDetailModal({ report, onClose }: Props) {
                 : `自動保存 ${timeString(report.savedAt)}`}
             </p>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="tap-target ml-auto grid place-items-center rounded-xl text-slate-500 active:bg-slate-100"
-            aria-label="日報詳細を閉じる"
-          >
-            <X size={22} />
-          </button>
+          <div className="ml-auto flex items-center gap-1">
+            {activeView === 'timeline' && (
+              <button
+                type="button"
+                onClick={copyTimeline}
+                className="tap-target flex items-center gap-1 rounded-xl px-2 py-1.5 text-xs font-bold text-slate-600 active:bg-slate-100"
+                aria-label="GPS付きログをコピー"
+              >
+                {copyStatus === 'copied' ? <Check size={16} /> : <Copy size={16} />}
+                {copyStatus === 'copied' ? 'コピー済み' : 'コピー'}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              className="tap-target grid place-items-center rounded-xl text-slate-500 active:bg-slate-100"
+              aria-label="日報詳細を閉じる"
+            >
+              <X size={22} />
+            </button>
+          </div>
         </header>
 
         <div className="grid grid-cols-2 border-b border-slate-200 bg-white p-1" role="tablist" aria-label="日報表示切り替え">
@@ -212,18 +225,10 @@ export function DailyReportDetailModal({ report, onClose }: Props) {
             </>
           ) : (
             <>
-              <button
-                type="button"
+              <TimelineCopyButton
+                copyStatus={copyStatus}
                 onClick={copyTimeline}
-                className="tap-target mb-2 flex w-full items-center justify-center gap-1.5 rounded-xl bg-slate-700 px-3 py-2 text-xs font-bold text-white active:bg-slate-800"
-              >
-                {copyStatus === 'copied' ? <Check size={16} /> : <Copy size={16} />}
-                {copyStatus === 'copied'
-                  ? 'コピーしました'
-                  : copyStatus === 'error'
-                    ? 'コピーに失敗しました'
-                    : 'GPS付きログをコピー'}
-              </button>
+              />
               <div className="overflow-hidden rounded-xl border border-slate-200 bg-white divide-y divide-slate-100">
                 {sortedActivities.map((activity) => {
                   const details = activityDetails(activity);
@@ -286,6 +291,29 @@ function DetailTab({
     >
       {icon}
       {label}
+    </button>
+  );
+}
+
+function TimelineCopyButton({
+  copyStatus,
+  onClick,
+}: {
+  copyStatus: 'idle' | 'copied' | 'error';
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="tap-target mb-2 flex w-full items-center justify-center gap-1.5 rounded-xl bg-slate-700 px-3 py-2 text-xs font-bold text-white active:bg-slate-800"
+    >
+      {copyStatus === 'copied' ? <Check size={16} /> : <Copy size={16} />}
+      {copyStatus === 'copied'
+        ? 'コピーしました'
+        : copyStatus === 'error'
+          ? 'コピーに失敗しました'
+          : 'GPS付きログをコピー'}
     </button>
   );
 }
