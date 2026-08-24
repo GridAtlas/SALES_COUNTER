@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState, type ReactNode } from 'react';
-import { BarChart3, Clock3, X } from 'lucide-react';
+import { BarChart3, Check, Clock3, Copy, X } from 'lucide-react';
 import { ACTIVITIES, getActivityDef } from '@/lib/constants';
 import {
   countFaceContacts,
@@ -22,11 +22,53 @@ const salesActivities = ACTIVITIES.slice(6);
 
 const timeString = (timestamp: number) =>
   new Intl.DateTimeFormat('ja-JP', {
+    timeZone: 'Asia/Tokyo',
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
     hour12: false,
   }).format(new Date(timestamp));
+
+const activityLabel = (activity: Activity) =>
+  isFaceContactActivity(activity)
+    ? '対面接触'
+    : getActivityDef(activity.type)?.label ?? activity.type;
+
+const gpsStatusLabel = (activity: Activity) => {
+  switch (activity.gpsStatus) {
+    case 'disabled':
+      return 'GPSオフ';
+    case 'pending':
+      return '取得中';
+    case 'denied':
+      return '位置情報の許可なし';
+    case 'unavailable':
+      return '現在地を取得できません';
+    case 'timeout':
+      return '位置情報の取得タイムアウト';
+    case 'error':
+      return '位置情報の取得エラー';
+    default:
+      return '位置情報なし';
+  }
+};
+
+const gpsLogText = (activity: Activity) => {
+  const { gpsLatitude: latitude, gpsLongitude: longitude } = activity;
+  if (typeof latitude !== 'number' || typeof longitude !== 'number') {
+    return `GPS：${gpsStatusLabel(activity)}`;
+  }
+
+  const accuracy =
+    typeof activity.gpsAccuracy === 'number'
+      ? `・精度 約${Math.round(activity.gpsAccuracy)}m`
+      : '';
+  const capturedAt = activity.gpsCapturedAt
+    ? `・取得 ${timeString(activity.gpsCapturedAt)}`
+    : '';
+  const coordinates = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+  return `GPS：${coordinates}${accuracy}${capturedAt}\n地図：https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`;
+};
 
 const activityDetails = (activity: Activity): string[] => {
   const rejectionReason = activity.rejectionReason
@@ -75,6 +117,9 @@ const activityDetails = (activity: Activity): string[] => {
 
 export function DailyReportDetailModal({ report, onClose }: Props) {
   const [activeView, setActiveView] = useState<DetailView>('summary');
+  const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'error'>(
+    'idle',
+  );
   const sortedActivities = useMemo(
     () => [...report.activities].sort((left, right) => left.timestamp - right.timestamp),
     [report.activities],
@@ -85,6 +130,30 @@ export function DailyReportDetailModal({ report, onClose }: Props) {
       : report.activities.filter((activity) => activity.type === def.type).length;
   const sectionTotal = (defs: ActivityDef[]) =>
     defs.reduce((sum, def) => sum + countOf(def), 0);
+  const copyTimeline = async () => {
+    const activityLog = sortedActivities
+      .map((activity) => {
+        const details = activityDetails(activity);
+        return [
+          `${timeString(activity.timestamp)} ${activityLabel(activity)}${
+            details.length > 0 ? `（${details.join(' / ')}）` : ''
+          }`,
+          gpsLogText(activity),
+        ].join('\n');
+      })
+      .join('\n\n');
+    const ending = report.isFinalized && report.endedAt
+      ? `\n\n${timeString(report.endedAt)} 活動終了`
+      : '';
+
+    try {
+      await navigator.clipboard.writeText(`${report.date} 日報\n\n${activityLog}${ending}`);
+      setCopyStatus('copied');
+    } catch {
+      setCopyStatus('error');
+    }
+    window.setTimeout(() => setCopyStatus('idle'), 2_000);
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-3">
@@ -142,38 +211,50 @@ export function DailyReportDetailModal({ report, onClose }: Props) {
               <ReportCountSection title="営業活動" defs={salesActivities} countOf={countOf} />
             </>
           ) : (
-            <div className="overflow-hidden rounded-xl border border-slate-200 bg-white divide-y divide-slate-100">
-              {sortedActivities.map((activity) => {
-                const details = activityDetails(activity);
-                return (
-                  <div key={activity.id} className="flex gap-2 px-3 py-2">
-                    <span className="num w-[62px] shrink-0 text-xs text-slate-400">
-                      {timeString(activity.timestamp)}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold text-slate-700">
-                        {isFaceContactActivity(activity)
-                          ? '対面接触'
-                          : getActivityDef(activity.type)?.label ?? activity.type}
-                      </p>
-                      {details.length > 0 && (
-                        <p className="mt-0.5 text-[11px] leading-snug text-slate-500">
-                          {details.join(' / ')}
+            <>
+              <button
+                type="button"
+                onClick={copyTimeline}
+                className="tap-target mb-2 flex w-full items-center justify-center gap-1.5 rounded-xl bg-slate-700 px-3 py-2 text-xs font-bold text-white active:bg-slate-800"
+              >
+                {copyStatus === 'copied' ? <Check size={16} /> : <Copy size={16} />}
+                {copyStatus === 'copied'
+                  ? 'コピーしました'
+                  : copyStatus === 'error'
+                    ? 'コピーに失敗しました'
+                    : 'GPS付きログをコピー'}
+              </button>
+              <div className="overflow-hidden rounded-xl border border-slate-200 bg-white divide-y divide-slate-100">
+                {sortedActivities.map((activity) => {
+                  const details = activityDetails(activity);
+                  return (
+                    <div key={activity.id} className="flex gap-2 px-3 py-2">
+                      <span className="num w-[62px] shrink-0 text-xs text-slate-400">
+                        {timeString(activity.timestamp)}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold text-slate-700">
+                          {activityLabel(activity)}
                         </p>
-                      )}
+                        {details.length > 0 && (
+                          <p className="mt-0.5 text-[11px] leading-snug text-slate-500">
+                            {details.join(' / ')}
+                          </p>
+                        )}
+                      </div>
                     </div>
+                  );
+                })}
+                {report.isFinalized && report.endedAt && (
+                  <div className="flex gap-2 bg-rose-50 px-3 py-2">
+                    <span className="num w-[62px] shrink-0 text-xs text-rose-500">
+                      {timeString(report.endedAt)}
+                    </span>
+                    <p className="text-sm font-bold text-rose-700">活動終了</p>
                   </div>
-                );
-              })}
-              {report.isFinalized && report.endedAt && (
-                <div className="flex gap-2 bg-rose-50 px-3 py-2">
-                  <span className="num w-[62px] shrink-0 text-xs text-rose-500">
-                    {timeString(report.endedAt)}
-                  </span>
-                  <p className="text-sm font-bold text-rose-700">活動終了</p>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            </>
           )}
         </div>
       </div>
