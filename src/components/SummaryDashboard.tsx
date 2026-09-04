@@ -218,26 +218,26 @@ export function SummaryDashboard({ activities, hydrated }: Props) {
                   <h2 className="bg-orange-300 px-3 py-2 text-center text-xl font-black tracking-tight text-slate-900">{section.title}</h2>
                   <p className="num flex min-w-24 items-center justify-center bg-slate-200 px-3 text-sm font-black text-slate-800">{section.rangeLabel}</p>
                 </header>
-                <div className="overflow-x-auto">
-                  <table className="summary-table w-full min-w-[35rem] border-collapse text-center">
+                <div className="overflow-hidden">
+                  <table className="summary-table w-full table-fixed border-collapse text-center">
                     <thead>
                       <tr>
-                        <th scope="col" className="w-12 bg-slate-300 text-[10px] text-slate-600">項目</th>
-                        {METRICS.map((metric) => <th key={metric.key} scope="col" title={metric.label} className="bg-slate-300 px-1 py-2 text-lg font-black text-slate-900">{metric.shortLabel}</th>)}
+                        <th scope="col" className="w-9 bg-slate-300 text-[10px] text-slate-600">項目</th>
+                        {METRICS.map((metric) => <th key={metric.key} scope="col" title={metric.label} className="whitespace-nowrap bg-slate-300 px-0.5 py-2 text-base font-black text-slate-900">{metric.shortLabel}</th>)}
                       </tr>
                     </thead>
                     <tbody>
                       <tr>
                         <th scope="row" className="bg-slate-200 text-xs font-bold text-slate-700">目標</th>
-                        {METRICS.map((metric) => <td key={metric.key} className="num text-sm font-bold text-slate-700">{target[metric.key] ?? '—'}</td>)}
+                        {METRICS.map((metric) => <td key={metric.key} className="num truncate px-0.5 text-sm font-bold text-slate-700">{target[metric.key] ?? '—'}</td>)}
                       </tr>
                       <tr>
                         <th scope="row" className="bg-slate-200 text-xs font-bold text-slate-700">実績</th>
-                        {METRICS.map((metric) => <td key={metric.key} className="num text-lg font-black text-cyan-800">{actual[metric.key]}</td>)}
+                        {METRICS.map((metric) => <td key={metric.key} className="num truncate px-0.5 text-base font-black text-cyan-800">{actual[metric.key]}</td>)}
                       </tr>
                       <tr>
                         <th scope="row" className="bg-slate-200 text-xs font-bold text-slate-700">移行率</th>
-                        {METRICS.map((metric, index) => <td key={metric.key} className="num text-xs font-bold text-slate-600">{rate(actual[metric.key], index === 0 ? undefined : actual[METRICS[index - 1].key])}</td>)}
+                        {METRICS.map((metric, index) => <td key={metric.key} className="num truncate px-0.5 text-[10px] font-bold text-slate-600">{rate(actual[metric.key], index === 0 ? undefined : actual[METRICS[index - 1].key])}</td>)}
                       </tr>
                     </tbody>
                   </table>
