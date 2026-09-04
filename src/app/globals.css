@@ -164,6 +164,12 @@ body {
   line-height: 1;
 }
 
+.summary-table th,
+.summary-table td {
+  border: 1px solid rgb(71 85 105);
+  height: 2.35rem;
+}
+
 /* iPhone Safari の date/time 固有最小幅と入力フォーカス時ズームを抑える。 */
 .appointment-dialog {
   box-sizing: border-box;

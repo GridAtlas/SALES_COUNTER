@@ -21,6 +21,7 @@ import { ProspectModal } from '@/components/ProspectModal';
 import { ProspectTargetModal } from '@/components/ProspectTargetModal';
 import { RejectionReasonModal } from '@/components/RejectionReasonModal';
 import { StageRecordTargetModal } from '@/components/StageRecordTargetModal';
+import { SummaryDashboard } from '@/components/SummaryDashboard';
 import { ViewTabs, type HomeView } from '@/components/ViewTabs';
 import { BottomBar } from '@/components/BottomBar';
 import { Header } from '@/components/Header';
@@ -1910,6 +1911,8 @@ export default function HomePage() {
           onUpdate={(id, details) => updateActivity(id, details)}
           onDelete={removeActivity}
         />
+      ) : activeView === 'summary' ? (
+        <SummaryDashboard activities={activities} hydrated={hydrated} />
       ) : (
         <DailyReportList reports={dailyReports} hydrated={hydrated} />
       )}

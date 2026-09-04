@@ -1,8 +1,8 @@
 'use client';
 
-import { CalendarDays, LayoutGrid, Star } from 'lucide-react';
+import { BarChart3, CalendarDays, LayoutGrid, Star } from 'lucide-react';
 
-export type HomeView = 'counter' | 'appointments' | 'prospects' | 'reports';
+export type HomeView = 'counter' | 'summary' | 'appointments' | 'prospects' | 'reports';
 
 interface Props {
   activeView: HomeView;
@@ -32,7 +32,7 @@ export function ViewTabs({
 
   return (
     <div
-      className="app-tabs mx-2 mb-1 grid grid-cols-3 rounded-xl bg-stone-200/80 p-1"
+      className="app-tabs mx-2 mb-1 grid grid-cols-4 rounded-xl bg-stone-200/80 p-1"
       role="tablist"
       aria-label="画面切り替え"
     >
@@ -45,6 +45,16 @@ export function ViewTabs({
       >
         <LayoutGrid size={14} />
         カウンター
+      </button>
+      <button
+        type="button"
+        role="tab"
+        aria-selected={activeView === 'summary'}
+        onClick={() => onChange('summary')}
+        className={tabClass('summary', 'text-cyan-700')}
+      >
+        <BarChart3 size={14} />
+        サマリ
       </button>
       <button
         type="button"
