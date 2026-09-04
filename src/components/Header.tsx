@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { MapPin, Menu, X } from 'lucide-react';
+import { MapPin, Menu, RefreshCw, X } from 'lucide-react';
 
 interface Props {
   gpsEnabled: boolean;
@@ -10,6 +10,16 @@ interface Props {
 
 export function Header({ gpsEnabled, onGpsEnabledChange }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [updating, setUpdating] = useState(false);
+
+  const refreshSystem = () => {
+    setUpdating(true);
+    // クエリを毎回変えることで、ホーム画面に追加した版でも
+    // GitHub Pages の最新 HTML と紐づく JavaScript を取得する。
+    const url = new URL(window.location.href);
+    url.searchParams.set('update', String(Date.now()));
+    window.location.replace(url.toString());
+  };
 
   return (
     <header className="app-header relative flex items-center justify-between px-4">
@@ -86,8 +96,27 @@ export function Header({ gpsEnabled, onGpsEnabledChange }: Props) {
                 />
               </span>
             </button>
+            <button
+              type="button"
+              onClick={refreshSystem}
+              disabled={updating}
+              className="tap-target mt-2 flex w-full items-center gap-3 rounded-xl bg-cyan-50 p-3 text-left active:bg-cyan-100 disabled:opacity-60"
+              aria-label="公開済みの最新システムに更新"
+            >
+              <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-white text-cyan-700 shadow-sm">
+                <RefreshCw size={19} className={updating ? 'animate-spin' : ''} />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-bold text-cyan-800">
+                  {updating ? '更新しています…' : 'システム更新'}
+                </span>
+                <span className="block text-[10px] text-cyan-700">
+                  公開済みの最新画面を読み込みます
+                </span>
+              </span>
+            </button>
             <p className="mt-2 px-1 text-[10px] text-stone-400">
-              初期設定はOFFです。変更はこの端末に保存されます。
+              GPS と目標値の設定はこの端末に保存されます。
             </p>
           </section>
         </>
